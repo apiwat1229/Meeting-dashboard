@@ -1,7 +1,7 @@
 "use client";
 
 import { createElement, type ReactNode } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu";
 
 type ContextMenuProps = {
@@ -11,9 +11,10 @@ type ContextMenuProps = {
   ariaLabel: string;
   children: ReactNode;
   onEdit: () => void;
+  onDelete: () => void;
 };
 
-export function ContextMenu({ as, className, role, ariaLabel, children, onEdit }: ContextMenuProps) {
+export function ContextMenu({ as, className, role, ariaLabel, children, onEdit, onDelete }: ContextMenuProps) {
   const trigger = createElement(as, { className, role, "aria-label": ariaLabel, tabIndex: 0 }, children);
 
   return (
@@ -25,6 +26,11 @@ export function ContextMenu({ as, className, role, ariaLabel, children, onEdit }
             <ContextMenuPrimitive.Item className="context-menu-item" onClick={onEdit}>
               <Pencil size={14} aria-hidden="true" />
               Edit
+            </ContextMenuPrimitive.Item>
+            <ContextMenuPrimitive.Separator className="context-menu-separator" />
+            <ContextMenuPrimitive.Item className="context-menu-item context-menu-item-danger" onClick={onDelete}>
+              <Trash2 size={14} aria-hidden="true" />
+              Delete
             </ContextMenuPrimitive.Item>
           </ContextMenuPrimitive.Popup>
         </ContextMenuPrimitive.Positioner>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Trash2, X } from "lucide-react";
+import { X } from "lucide-react";
 import { deleteIssueAction, updateIssueAction } from "@/app/actions";
 import { ConfirmActionDialog } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -45,13 +45,15 @@ export function IssueEditor({ issue, projects, className, children }: { issue: I
   async function performConfirmedAction() {
     const form = formRef.current;
     const action = confirmAction;
-    if (!form || !action) return;
+    if (!action || (action === "update" && !form)) return;
 
     setPending(true);
     try {
+      const formData = action === "update" && form ? new FormData(form) : new FormData();
+      if (action === "delete") formData.set("id", String(issue.id));
       const result = action === "update"
-        ? await updateIssueAction(new FormData(form))
-        : await deleteIssueAction(new FormData(form));
+        ? await updateIssueAction(formData)
+        : await deleteIssueAction(formData);
       if (result.ok) {
         toast.success(result.message);
         setOpen(false);
@@ -70,7 +72,7 @@ export function IssueEditor({ issue, projects, className, children }: { issue: I
     <ContextMenu as="article" className={className} ariaLabel={`Issue ${issue.title}`} onEdit={() => {
       setEditState(issue.state);
       setOpen(true);
-    }}>
+    }} onDelete={() => setConfirmAction("delete")}>
       {children}
       <Popover open={open} onOpenChange={(nextOpen) => {
         // A confirmation dialog is portaled outside this popover. Do not let
@@ -108,9 +110,6 @@ export function IssueEditor({ issue, projects, className, children }: { issue: I
             )}
             <Button type="submit">Save changes</Button>
           </form>
-          <div className="crud-delete-row">
-            <Button type="button" variant="ghost" className="crud-delete-trigger" onClick={() => setConfirmAction("delete")}><Trash2 size={14} /> Delete issue</Button>
-          </div>
         </PopoverContent>
       </Popover>
       <ConfirmActionDialog

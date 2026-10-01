@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { createProjectAction, deleteProjectAction, updateProjectAction } from "@/app/actions";
 import { ConfirmActionDialog } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -77,13 +77,15 @@ export function ProjectEditor({ project, children }: { project: ProjectData; chi
   async function performConfirmedAction() {
     const form = formRef.current;
     const action = confirmAction;
-    if (!form || !action) return;
+    if (!action || (action === "update" && !form)) return;
 
     setPending(true);
     try {
+      const formData = action === "update" && form ? new FormData(form) : new FormData();
+      if (action === "delete") formData.set("id", String(project.id));
       const result = action === "update"
-        ? await updateProjectAction(new FormData(form))
-        : await deleteProjectAction(new FormData(form));
+        ? await updateProjectAction(formData)
+        : await deleteProjectAction(formData);
       if (result.ok) {
         toast.success(result.message);
         setOpen(false);
@@ -99,7 +101,7 @@ export function ProjectEditor({ project, children }: { project: ProjectData; chi
   }
 
   return (
-    <ContextMenu as="div" className="project-row" role="row" ariaLabel={`Project ${project.name}`} onEdit={() => setOpen(true)}>
+    <ContextMenu as="div" className="project-row" role="row" ariaLabel={`Project ${project.name}`} onEdit={() => setOpen(true)} onDelete={() => setConfirmAction("delete")}>
       {children}
       <Popover open={open} onOpenChange={(nextOpen) => {
         // Keep the form mounted until the confirmation action has run.
@@ -126,9 +128,6 @@ export function ProjectEditor({ project, children }: { project: ProjectData; chi
             <label className="field-label">Today<Input name="today" defaultValue={project.today} maxLength={500} /></label>
             <Button type="submit">Save changes</Button>
           </form>
-          <div className="crud-delete-row">
-            <Button type="button" variant="ghost" className="crud-delete-trigger" onClick={() => setConfirmAction("delete")}><Trash2 size={14} /> Delete project</Button>
-          </div>
         </PopoverContent>
       </Popover>
       <ConfirmActionDialog

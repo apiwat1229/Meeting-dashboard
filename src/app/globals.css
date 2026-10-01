@@ -795,32 +795,6 @@ p {
   gap: 11px;
 }
 
-.crud-delete-row {
-  display: grid;
-  gap: 8px;
-  padding-top: 10px;
-  border-top: 1px solid var(--color-border);
-}
-
-.crud-delete-row > p {
-  color: var(--color-muted);
-  font-size: 12px;
-}
-
-.crud-delete-trigger {
-  justify-content: flex-start;
-  min-height: 30px;
-  padding: 5px 0;
-  color: var(--color-danger);
-}
-
-.crud-delete-actions,
-.crud-delete-actions form {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
 .editor-popover-anchor {
   position: absolute;
   z-index: -1;
@@ -852,6 +826,12 @@ p {
   outline: none;
 }
 
+.context-menu-separator {
+  height: 1px;
+  margin: 2px 4px;
+  background: var(--color-border);
+}
+
 .context-menu-item {
   min-height: 34px;
   display: flex;
@@ -867,6 +847,15 @@ p {
 .context-menu-item[data-highlighted] {
   color: var(--color-ink);
   background: var(--color-info-soft);
+}
+
+.context-menu-item-danger {
+  color: var(--color-danger);
+}
+
+.context-menu-item-danger[data-highlighted] {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
 }
 
 .field-label {
