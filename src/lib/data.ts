@@ -71,6 +71,7 @@ export async function getDashboardData() {
         detail: issues.detail,
         nextStep: issues.nextStep,
         prevention: issues.prevention,
+        imageUrl: issues.imageUrl,
       })
       .from(issues)
       .leftJoin(projects, eq(issues.projectId, projects.id))

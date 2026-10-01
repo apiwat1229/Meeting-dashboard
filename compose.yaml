@@ -11,8 +11,11 @@ services:
       HOSTNAME: 0.0.0.0
       PORT: 3000
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env.production}
+      UPLOAD_DIR: /app/uploads
     ports:
       - "${APP_PORT:-3000}:3000"
+    volumes:
+      - dashboard_uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -35,3 +38,4 @@ services:
 
 volumes:
   dashboard_data:
+  dashboard_uploads:

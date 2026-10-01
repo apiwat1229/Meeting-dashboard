@@ -7,7 +7,6 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { getDashboardData } from "@/lib/data";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Progress } from "@/components/ui/progress";
@@ -15,10 +14,11 @@ import { ReportDatePicker } from "@/components/dashboard/report-date-picker";
 import { AddIssueMenu } from "@/components/dashboard/add-issue-menu";
 import { IssueEditor } from "@/components/dashboard/issue-editor";
 import { ActivityEditor, AddActivityMenu } from "@/components/dashboard/activity-crud";
-import { ActivityCompletionToggle } from "@/components/dashboard/confirmed-toggle";
+import { ActivityStatusIndicator } from "@/components/dashboard/activity-status-indicator";
 import { AddProjectMenu, ProjectEditor } from "@/components/dashboard/project-crud";
 import { ProjectSubtasks } from "@/components/dashboard/project-subtasks";
 import { DailyRefresh } from "@/components/dashboard/daily-refresh";
+import { FullScreenToggle } from "@/components/dashboard/full-screen-toggle";
 
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
 type ProjectStatus = DashboardData["projects"][number]["status"];
@@ -33,12 +33,6 @@ function statusTone(status: ProjectStatus): "success" | "danger" | "finish" {
 function issueTone(issue: IssueRow) {
   if (issue.state === "CLOSED") return "success" as const;
   return issue.severity === "HIGH" ? "danger" as const : "warning" as const;
-}
-
-function issueLabel(issue: IssueRow) {
-  if (issue.state === "CLOSED") return "Done";
-  if (issue.severity === "HIGH") return "High";
-  return "Med.";
 }
 
 function SummaryCard({ label, children }: { label: string; children: ReactNode }) {
@@ -71,13 +65,14 @@ function SummaryBreakdown({
   );
 }
 
-function ProjectRow({ project, tasks }: { project: DashboardData["projects"][number]; tasks: DashboardData["projectTasks"] }) {
+function ProjectRow({ project, tasks, index }: { project: DashboardData["projects"][number]; tasks: DashboardData["projectTasks"]; index: number }) {
   return (
-    <ProjectEditor project={project}>
-      <ProjectSubtasks projectId={project.id} projectName={project.name} tasks={tasks} />
-      <span className="project-work type-body">{project.yesterday || "—"}</span>
-      <span className="project-work type-body">{project.today || "—"}</span>
-      <div className="project-progress-cell">
+    <ProjectEditor project={project} tasks={tasks}>
+      <span className="project-index type-body" role="cell">{index + 1}.</span>
+      <div className="project-name" role="cell"><ProjectSubtasks projectId={project.id} projectName={project.name} tasks={tasks} /></div>
+      <span className="project-work type-body" role="cell">{project.yesterday || "—"}</span>
+      <span className="project-work type-body" role="cell">{project.today || "—"}</span>
+      <div className="project-progress-cell" role="cell">
         <Progress value={project.progress} tone={statusTone(project.status)} />
         <span className="progress-value type-caption">{project.progress}%</span>
       </div>
@@ -101,22 +96,24 @@ function ProjectSection({ data }: { data: DashboardData }) {
       </div>
       <div className="project-table" role="table" aria-label="Project progress">
         <div className="project-header type-caption" role="row">
+          <span role="columnheader">No.</span>
           <span role="columnheader">Project</span>
           <span role="columnheader">Yesterday</span>
           <span role="columnheader">Today</span>
           <span role="columnheader">Progress</span>
         </div>
         <div className="project-body" role="rowgroup">
-          {data.projects.map((project) => (
+          {data.projects.map((project, index) => (
             <ProjectRow
               key={project.id}
               project={project}
               tasks={data.projectTasks.filter((task) => task.projectId === project.id)}
+              index={index}
             />
           ))}
           {data.projects.length === 0 && (
             <div className="project-empty-row" role="row">
-              <div role="cell" aria-colspan={4}>
+              <div role="cell" aria-colspan={5}>
                 <Empty className="dashboard-empty">
                   <EmptyMedia variant="icon"><FolderKanban size={16} /></EmptyMedia>
                   <EmptyHeader>
@@ -137,8 +134,13 @@ function IssueSection({ data }: { data: DashboardData }) {
   return (
     <Card className="content-card issue-card">
       <div className="section-heading issue-heading">
-        <div>
+        <div className="issue-heading-copy">
           <h2 className="type-h2">Issues / Trouble</h2>
+          <div className="issue-legend" role="group" aria-label="Issue color legend">
+            <span className="issue-legend-item"><span className="issue-legend-swatch issue-legend-high" aria-hidden="true" />High</span>
+            <span className="issue-legend-item"><span className="issue-legend-swatch issue-legend-medium" aria-hidden="true" />Medium</span>
+            <span className="issue-legend-item"><span className="issue-legend-swatch issue-legend-done" aria-hidden="true" />Done</span>
+          </div>
         </div>
         <AddIssueMenu projects={data.projects.map(({ id, name }) => ({ id, name }))} />
       </div>
@@ -156,20 +158,25 @@ function IssueSection({ data }: { data: DashboardData }) {
               detail: issue.detail,
               nextStep: issue.nextStep,
               prevention: issue.prevention,
+              projectName: issue.projectName,
+              imageUrl: issue.imageUrl,
             }}
             projects={data.projects.map(({ id, name }) => ({ id, name }))}
           >
-            <div className="issue-label"><Badge variant={issueTone(issue)}>{issueLabel(issue)}</Badge></div>
             <div className="issue-copy">
               <div className="issue-title-row">
                 <strong className="type-body">{issue.title}</strong>
                 {issue.projectName && <span className="issue-project type-caption">{issue.projectName}</span>}
               </div>
-              <div className="issue-details type-caption">
-                <p><strong>Detail</strong><span>{issue.detail || "—"}</span></p>
-                {issue.state !== "CLOSED" && <p><strong>Next step</strong><span>{issue.nextStep || "—"}</span></p>}
-                {issue.state === "CLOSED" && <p><strong>Prevention</strong><span>{issue.prevention || "—"}</span></p>}
-              </div>
+              {issue.detail && <p className="issue-description">{issue.detail}</p>}
+              <p className="issue-follow-up">
+                <span className="issue-follow-up-label">{issue.state === "CLOSED" ? "Prevention" : "Action"}</span>
+                <span className="issue-follow-up-text">
+                  {issue.state === "CLOSED"
+                    ? issue.prevention || "Prevention plan not set"
+                    : issue.nextStep || "Next step not set"}
+                </span>
+              </p>
             </div>
           </IssueEditor>
         ))}
@@ -209,7 +216,7 @@ function ActivityCard({
       <ul className="activity-list">
         {entries.map((activity) => (
           <ActivityEditor key={activity.id} activity={activity}>
-            <ActivityCompletionToggle activityId={activity.id} content={activity.content} completed={activity.completed} />
+            <ActivityStatusIndicator completed={activity.completed} />
             <span className="type-body">{activity.content}</span>
           </ActivityEditor>
         ))}
@@ -250,6 +257,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
           </div>
           <div className="report-meta type-caption">
             <ReportDatePicker initialDateKey={reportDateKey} />
+            <FullScreenToggle />
             <Link
               href="/settings/theme"
               className="button button-secondary theme-topbar-button"

@@ -13,14 +13,22 @@ function AlertDialog(props: React.ComponentProps<typeof AlertDialogPrimitive.Roo
   return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />;
 }
 
-function AlertDialogContent({ className = "", ...props }: PopupProps) {
+function AlertDialogContent({ className = "", onClick, ...props }: PopupProps) {
   return (
     <AlertDialogPrimitive.Portal>
-      <AlertDialogPrimitive.Backdrop data-slot="alert-dialog-backdrop" className="alert-dialog-backdrop" />
+      <AlertDialogPrimitive.Backdrop
+        data-slot="alert-dialog-backdrop"
+        className="alert-dialog-backdrop"
+        onClick={(event) => event.stopPropagation()}
+      />
       <AlertDialogPrimitive.Viewport data-slot="alert-dialog-viewport" className="alert-dialog-viewport">
         <AlertDialogPrimitive.Popup
           data-slot="alert-dialog-content"
           className={`alert-dialog-content ${className}`.trim()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onClick?.(event);
+          }}
           {...props}
         />
       </AlertDialogPrimitive.Viewport>

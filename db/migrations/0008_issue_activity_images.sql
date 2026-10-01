@@ -1,0 +1,5 @@
+ALTER TABLE issues
+  ADD COLUMN image_url TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE activities
+  ADD COLUMN image_url TEXT NOT NULL DEFAULT '';

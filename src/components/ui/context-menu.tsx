@@ -1,6 +1,6 @@
 "use client";
 
-import { createElement, type ReactNode } from "react";
+import { createElement, type KeyboardEvent, type ReactNode } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu";
 
@@ -12,10 +12,22 @@ type ContextMenuProps = {
   children: ReactNode;
   onEdit: () => void;
   onDelete: () => void;
+  onActivate?: () => void;
 };
 
-export function ContextMenu({ as, className, role, ariaLabel, children, onEdit, onDelete }: ContextMenuProps) {
-  const trigger = createElement(as, { className, role, "aria-label": ariaLabel, tabIndex: 0 }, children);
+export function ContextMenu({ as, className, role, ariaLabel, children, onEdit, onDelete, onActivate }: ContextMenuProps) {
+  const trigger = createElement(as, {
+    className,
+    role,
+    "aria-label": ariaLabel,
+    tabIndex: 0,
+    onClick: onActivate,
+    onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+      if (event.target !== event.currentTarget || !onActivate || (event.key !== "Enter" && event.key !== " ")) return;
+      event.preventDefault();
+      onActivate();
+    },
+  }, children);
 
   return (
     <ContextMenuPrimitive.Root>
@@ -27,7 +39,6 @@ export function ContextMenu({ as, className, role, ariaLabel, children, onEdit, 
               <Pencil size={14} aria-hidden="true" />
               Edit
             </ContextMenuPrimitive.Item>
-            <ContextMenuPrimitive.Separator className="context-menu-separator" />
             <ContextMenuPrimitive.Item className="context-menu-item context-menu-item-danger" onClick={onDelete}>
               <Trash2 size={14} aria-hidden="true" />
               Delete

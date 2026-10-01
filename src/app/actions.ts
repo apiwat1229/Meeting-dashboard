@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { activities, issues, projectTasks, projects, themeSettings } from "@/db/schema";
 import { themeConfigSchema } from "@/lib/theme-schema";
 import { getBangkokDateKey, shiftDateKey } from "@/lib/date-key";
+import { deleteStoredImage } from "@/lib/image-uploads";
 
 const projectStatusSchema = z.enum(["ON_TRACK", "DELAY", "FINISH"]);
 const projectTaskStatusSchema = z.enum(["TODO", "IN_PROGRESS", "DONE"]);
@@ -245,9 +246,14 @@ export async function deleteIssueAction(formData: FormData): Promise<MutationRes
   const parsed = z.object({ id: z.coerce.number().int().positive() }).safeParse({ id: formData.get("id") });
 
   if (!parsed.success) return invalidFormResult;
-  return runMutation("Issue deleted.", "Could not delete the issue.", () =>
-    db.delete(issues).where(eq(issues.id, parsed.data.id)),
-  );
+  let imageUrl = "";
+  const result = await runMutation("Issue deleted.", "Could not delete the issue.", async () => {
+    const [issue] = await db.select({ imageUrl: issues.imageUrl }).from(issues).where(eq(issues.id, parsed.data.id)).limit(1);
+    imageUrl = issue?.imageUrl ?? "";
+    await db.delete(issues).where(eq(issues.id, parsed.data.id));
+  });
+  if (result.ok) await deleteStoredImage(imageUrl).catch(() => undefined);
+  return result;
 }
 
 export async function createActivityAction(formData: FormData): Promise<MutationResult> {
@@ -302,9 +308,14 @@ export async function deleteActivityAction(formData: FormData): Promise<Mutation
   const parsed = z.object({ id: z.coerce.number().int().positive() }).safeParse({ id: formData.get("id") });
 
   if (!parsed.success) return invalidFormResult;
-  return runMutation("Activity deleted.", "Could not delete the activity.", () =>
-    db.delete(activities).where(eq(activities.id, parsed.data.id)),
-  );
+  let imageUrl = "";
+  const result = await runMutation("Activity deleted.", "Could not delete the activity.", async () => {
+    const [activity] = await db.select({ imageUrl: activities.imageUrl }).from(activities).where(eq(activities.id, parsed.data.id)).limit(1);
+    imageUrl = activity?.imageUrl ?? "";
+    await db.delete(activities).where(eq(activities.id, parsed.data.id));
+  });
+  if (result.ok) await deleteStoredImage(imageUrl).catch(() => undefined);
+  return result;
 }
 
 export async function toggleActivityAction(formData: FormData): Promise<MutationResult> {

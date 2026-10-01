@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { ListTodo, Pencil, Plus, Trash2, X } from "lucide-react";
 import { createProjectTaskAction, deleteProjectTaskAction, updateProjectTaskAction } from "@/app/actions";
 import { ConfirmActionDialog } from "@/components/ui/alert-dialog";
@@ -45,9 +45,7 @@ export function ProjectSubtasks({
   const [showCreate, setShowCreate] = useState(false);
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
   const [deleteTask, setDeleteTask] = useState<ProjectTask | null>(null);
-  const [confirmUpdate, setConfirmUpdate] = useState(false);
   const [pending, setPending] = useState(false);
-  const editFormRef = useRef<HTMLFormElement>(null);
 
   async function createTask(formData: FormData) {
     const result = await createProjectTaskAction(formData);
@@ -59,31 +57,41 @@ export function ProjectSubtasks({
     }
   }
 
-  async function performConfirmedAction() {
+  async function saveTask(formData: FormData) {
     setPending(true);
     try {
-      let result: { ok: boolean; message: string } | null = null;
-      if (confirmUpdate && editFormRef.current) {
-        result = await updateProjectTaskAction(new FormData(editFormRef.current));
-      } else if (deleteTask) {
-        const formData = new FormData();
-        formData.set("id", String(deleteTask.id));
-        formData.set("projectId", String(projectId));
-        result = await deleteProjectTaskAction(formData);
-      }
-
-      if (result?.ok) {
+      const result = await updateProjectTaskAction(formData);
+      if (result.ok) {
         toast.success(result.message);
         setEditingTask(null);
-        setDeleteTask(null);
-      } else if (result) {
+      } else {
         toast.error(result.message);
       }
     } catch {
-      toast.error(confirmUpdate ? "Could not update the subtask." : "Could not delete the subtask.");
+      toast.error("Could not update the subtask.");
     } finally {
       setPending(false);
-      setConfirmUpdate(false);
+    }
+  }
+
+  async function deleteTaskActionHandler() {
+    if (!deleteTask) return;
+    setPending(true);
+    try {
+      const formData = new FormData();
+      formData.set("id", String(deleteTask.id));
+      formData.set("projectId", String(projectId));
+      const result = await deleteProjectTaskAction(formData);
+      if (result.ok) {
+        toast.success(result.message);
+        setEditingTask(null);
+      } else {
+        toast.error(result.message);
+      }
+    } catch {
+      toast.error("Could not delete the subtask.");
+    } finally {
+      setPending(false);
       setDeleteTask(null);
     }
   }
@@ -96,11 +104,11 @@ export function ProjectSubtasks({
         setEditingTask(null);
       }
     }}>
-      <DialogTrigger className="project-name-trigger type-body" aria-label={`View subtasks for ${projectName}`} title={`View subtasks for ${projectName}`}>
+      <DialogTrigger className="project-name-trigger type-body" aria-label={`View subtasks for ${projectName}`} title={`View subtasks for ${projectName}`} onClick={(event) => event.stopPropagation()}>
         <span>{projectName}</span>
         <ListTodo size={15} aria-hidden="true" />
       </DialogTrigger>
-      <DialogContent className="project-tasks-dialog">
+      <DialogContent className="project-tasks-dialog" onClick={(event) => event.stopPropagation()}>
         <div className="project-tasks-header">
           <div>
             <DialogTitle>{projectName}</DialogTitle>
@@ -141,14 +149,14 @@ export function ProjectSubtasks({
               return (
                 <div className="project-task-item" role="listitem" key={task.id}>
                   {editingTask?.id === task.id ? (
-                    <form ref={editFormRef} className="project-task-form project-task-edit-form" onSubmit={(event) => { event.preventDefault(); setConfirmUpdate(true); }}>
+                    <form className="project-task-form project-task-edit-form" onSubmit={(event) => { event.preventDefault(); void saveTask(new FormData(event.currentTarget)); }}>
                       <input type="hidden" name="id" value={task.id} />
                       <input type="hidden" name="projectId" value={projectId} />
                       <label className="field-label">Task name<Input name="title" minLength={2} maxLength={220} required defaultValue={task.title} /></label>
                       <label className="field-label">Status<ComboboxSelect name="status" options={statusOptions} defaultValue={task.status} /></label>
                       <div className="project-task-form-actions">
                         <Button type="button" variant="secondary" onClick={() => setEditingTask(null)}>Cancel</Button>
-                        <Button type="submit">Save changes</Button>
+                        <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save changes"}</Button>
                       </div>
                     </form>
                   ) : (
@@ -170,19 +178,16 @@ export function ProjectSubtasks({
         )}
       </DialogContent>
       <ConfirmActionDialog
-        open={confirmUpdate || deleteTask !== null}
+        open={deleteTask !== null}
         onOpenChange={(nextOpen) => {
-          if (!nextOpen) {
-            setConfirmUpdate(false);
-            setDeleteTask(null);
-          }
+          if (!nextOpen) setDeleteTask(null);
         }}
-        title={deleteTask ? "Delete this subtask?" : "Save subtask changes?"}
-        description={deleteTask ? `Delete “${deleteTask.title}”? This cannot be undone.` : "Apply the changes to this subtask?"}
-        actionLabel={deleteTask ? "Delete task" : "Save changes"}
-        destructive={deleteTask !== null}
+        title="Delete this subtask?"
+        description={deleteTask ? `Delete “${deleteTask.title}”? This cannot be undone.` : "This cannot be undone."}
+        actionLabel="Delete task"
+        destructive
         pending={pending}
-        onConfirm={() => { void performConfirmedAction(); }}
+        onConfirm={() => { void deleteTaskActionHandler(); }}
       />
     </Dialog>
   );
