@@ -1,0 +1,33 @@
+{
+  "colors": {
+    "canvas": "#F3F6FA",
+    "panel": "#FFFFFF",
+    "panelAlt": "#FBFCFE",
+    "ink": "#172B49",
+    "muted": "#5E7491",
+    "border": "#D5E1ED",
+    "navy": "#112747",
+    "primary": "#22558A",
+    "success": "#18A96B",
+    "successSoft": "#E7F6EF",
+    "warning": "#F5AD36",
+    "warningSoft": "#FFF5E3",
+    "danger": "#ED5355",
+    "dangerSoft": "#FDEBEC",
+    "infoSoft": "#EAF3FF"
+  },
+  "typography": {
+    "h1": { "family": "noto", "size": 40, "weight": "700", "lineHeight": 1.15 },
+    "h2": { "family": "noto", "size": 19, "weight": "700", "lineHeight": 1.3 },
+    "h3": { "family": "noto", "size": 15, "weight": "700", "lineHeight": 1.35 },
+    "body": { "family": "noto", "size": 14, "weight": "400", "lineHeight": 1.55 },
+    "caption": { "family": "noto", "size": 12, "weight": "400", "lineHeight": 1.45 },
+    "metric": { "family": "noto", "size": 24, "weight": "700", "lineHeight": 1.2 }
+  },
+  "layout": {
+    "radius": 10,
+    "gap": 20,
+    "cardPadding": 20,
+    "maxWidth": 1840
+  }
+}
