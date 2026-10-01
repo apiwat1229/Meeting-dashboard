@@ -1,5 +1,5 @@
 import type { HTMLAttributes } from "react";
 
 export function Card({ className = "", ...props }: HTMLAttributes<HTMLElement>) {
-  return <section className={`surface-card ${className}`.trim()} {...props} />;
+  return <section data-slot="card" className={`surface-card ${className}`.trim()} {...props} />;
 }

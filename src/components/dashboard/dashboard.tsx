@@ -1,50 +1,33 @@
 import Link from "next/link";
 import {
-  Check,
   CircleAlert,
-  Pencil,
-  Plus,
+  FolderKanban,
+  ListTodo,
   Settings2,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import {
-  createActivityAction,
-  createIssueAction,
-  createProjectAction,
-  toggleActivityAction,
-  toggleIssueStateAction,
-  updateProjectAction,
-} from "@/app/actions";
 import type { getDashboardData } from "@/lib/data";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Progress } from "@/components/ui/progress";
 import { ReportDatePicker } from "@/components/dashboard/report-date-picker";
+import { AddIssueMenu } from "@/components/dashboard/add-issue-menu";
+import { IssueEditor } from "@/components/dashboard/issue-editor";
+import { ActivityEditor, AddActivityMenu } from "@/components/dashboard/activity-crud";
+import { ActivityCompletionToggle } from "@/components/dashboard/confirmed-toggle";
+import { AddProjectMenu, ProjectEditor } from "@/components/dashboard/project-crud";
+import { ProjectSubtasks } from "@/components/dashboard/project-subtasks";
+import { DailyRefresh } from "@/components/dashboard/daily-refresh";
 
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
 type ProjectStatus = DashboardData["projects"][number]["status"];
 type IssueRow = DashboardData["issues"][number];
 
-const statusInfo: Record<ProjectStatus, { label: string; tone: "success" | "warning" | "danger" }> = {
-  ON_TRACK: { label: "In Progress", tone: "success" },
-  ATTENTION: { label: "Attention", tone: "warning" },
-  DELAY: { label: "Delay", tone: "danger" },
-};
-
-function getReportDateKey() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Bangkok",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-}
-
-function statusTone(status: ProjectStatus) {
-  return statusInfo[status].tone;
+function statusTone(status: ProjectStatus): "success" | "danger" | "finish" {
+  if (status === "DELAY") return "danger";
+  if (status === "FINISH") return "finish";
+  return "success";
 }
 
 function issueTone(issue: IssueRow) {
@@ -55,8 +38,7 @@ function issueTone(issue: IssueRow) {
 function issueLabel(issue: IssueRow) {
   if (issue.state === "CLOSED") return "Done";
   if (issue.severity === "HIGH") return "High";
-  if (issue.severity === "MEDIUM") return "Med.";
-  return "Low";
+  return "Med.";
 }
 
 function SummaryCard({ label, children }: { label: string; children: ReactNode }) {
@@ -75,7 +57,7 @@ function SummaryBreakdown({
 }: {
   items: Array<{ value: string | number; label: string; tone: "neutral" | "success" | "warning" | "danger" }>;
   label: string;
-  columns?: 2 | 3;
+  columns?: 2 | 3 | 4;
 }) {
   return (
     <div className={`summary-breakdown summary-breakdown-${columns}`} role="group" aria-label={label}>
@@ -89,50 +71,17 @@ function SummaryBreakdown({
   );
 }
 
-function ProjectRow({ project }: { project: DashboardData["projects"][number] }) {
-  const info = statusInfo[project.status];
+function ProjectRow({ project, tasks }: { project: DashboardData["projects"][number]; tasks: DashboardData["projectTasks"] }) {
   return (
-    <div className="project-row">
-      <strong className="project-name type-body">{project.name}</strong>
-      <div className="project-status-cell">
-        <Badge tone={info.tone} className="project-status-badge">{info.label}</Badge>
-      </div>
+    <ProjectEditor project={project}>
+      <ProjectSubtasks projectId={project.id} projectName={project.name} tasks={tasks} />
       <span className="project-work type-body">{project.yesterday || "—"}</span>
       <span className="project-work type-body">{project.today || "—"}</span>
       <div className="project-progress-cell">
         <Progress value={project.progress} tone={statusTone(project.status)} />
         <span className="progress-value type-caption">{project.progress}%</span>
       </div>
-      <details className="row-editor">
-        <summary aria-label={`Edit ${project.name}`} title="Edit project">
-          <Pencil size={15} />
-        </summary>
-        <form action={updateProjectAction} className="row-editor-form">
-          <input type="hidden" name="id" value={project.id} />
-          <label>
-            Status
-            <select name="status" defaultValue={project.status}>
-              <option value="ON_TRACK">In Progress</option>
-              <option value="ATTENTION">Attention</option>
-              <option value="DELAY">Delay</option>
-            </select>
-          </label>
-          <label>
-            Progress %
-            <input name="progress" type="number" min="0" max="100" defaultValue={project.progress} required />
-          </label>
-          <label>
-            Yesterday
-            <input name="yesterday" defaultValue={project.yesterday} maxLength={500} />
-          </label>
-          <label>
-            Today
-            <input name="today" defaultValue={project.today} maxLength={500} />
-          </label>
-          <Button type="submit">Save project</Button>
-        </form>
-      </details>
-    </div>
+    </ProjectEditor>
   );
 }
 
@@ -140,36 +89,44 @@ function ProjectSection({ data }: { data: DashboardData }) {
   return (
     <Card className="content-card project-card">
       <div className="section-heading project-heading">
-        <div>
+        <div className="project-heading-copy">
           <h2 className="type-h2">Active Projects</h2>
+          <div className="project-legend" role="group" aria-label="Project status legend">
+            <span className="project-legend-item"><span className="project-legend-swatch legend-in-progress" aria-hidden="true" />Ongoing</span>
+            <span className="project-legend-item"><span className="project-legend-swatch legend-delay" aria-hidden="true" />Delayed</span>
+            <span className="project-legend-item"><span className="project-legend-swatch legend-finish" aria-hidden="true" />Early</span>
+          </div>
         </div>
-        <details className="add-menu">
-          <summary className="icon-button" aria-label="Add project" title="Add project"><Plus size={18} /></summary>
-          <form action={createProjectAction} className="popover-form">
-            <h3 className="type-h3">New project</h3>
-            <label className="field-label">Project name<input name="name" minLength={2} maxLength={140} required placeholder="Project name" /></label>
-            <div className="field-pair">
-            <label className="field-label">Status<select name="status" defaultValue="ON_TRACK"><option value="ON_TRACK">In Progress</option><option value="ATTENTION">Attention</option><option value="DELAY">Delay</option></select></label>
-              <label className="field-label">Progress %<input name="progress" type="number" min="0" max="100" defaultValue="0" required /></label>
-            </div>
-            <label className="field-label">Yesterday<input name="yesterday" maxLength={500} placeholder="Previous update" /></label>
-            <label className="field-label">Today<input name="today" maxLength={500} placeholder="Today's next step" /></label>
-            <Button type="submit"><Plus size={15} /> Save project</Button>
-          </form>
-        </details>
+        <AddProjectMenu />
       </div>
       <div className="project-table" role="table" aria-label="Project progress">
         <div className="project-header type-caption" role="row">
           <span role="columnheader">Project</span>
-          <span role="columnheader">Status</span>
           <span role="columnheader">Yesterday</span>
           <span role="columnheader">Today</span>
           <span role="columnheader">Progress</span>
-          <span aria-hidden="true" />
         </div>
         <div className="project-body" role="rowgroup">
-          {data.projects.map((project) => <ProjectRow key={project.id} project={project} />)}
-          {data.projects.length === 0 && <p className="empty-state">No projects yet. Add the first one to start tracking progress.</p>}
+          {data.projects.map((project) => (
+            <ProjectRow
+              key={project.id}
+              project={project}
+              tasks={data.projectTasks.filter((task) => task.projectId === project.id)}
+            />
+          ))}
+          {data.projects.length === 0 && (
+            <div className="project-empty-row" role="row">
+              <div role="cell" aria-colspan={4}>
+                <Empty className="dashboard-empty">
+                  <EmptyMedia variant="icon"><FolderKanban size={16} /></EmptyMedia>
+                  <EmptyHeader>
+                    <EmptyTitle>No active projects</EmptyTitle>
+                    <EmptyDescription>Add a project to start tracking progress.</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </Card>
@@ -183,42 +140,48 @@ function IssueSection({ data }: { data: DashboardData }) {
         <div>
           <h2 className="type-h2">Issues / Trouble</h2>
         </div>
-        <details className="add-menu">
-          <summary className="icon-button" title="Add issue" aria-label="Add issue"><Plus size={18} /></summary>
-          <form action={createIssueAction} className="popover-form">
-            <h3 className="type-h3">New issue</h3>
-            <label className="field-label">Issue title<input name="title" minLength={3} maxLength={180} required placeholder="Short issue title" /></label>
-            <div className="field-pair">
-              <label className="field-label">Project<select name="projectId" defaultValue=""><option value="">No linked project</option>{data.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
-              <label className="field-label">Severity<select name="severity" defaultValue="MEDIUM"><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option></select></label>
-            </div>
-            <label className="field-label">Detail<input name="detail" maxLength={1000} placeholder="What is happening?" /></label>
-            <label className="field-label">Next step<input name="nextStep" maxLength={500} placeholder="Owner / next action / due time" /></label>
-            <Button type="submit"><Plus size={15} /> Save issue</Button>
-          </form>
-        </details>
+        <AddIssueMenu projects={data.projects.map(({ id, name }) => ({ id, name }))} />
       </div>
       <div className="issue-list">
         {data.issues.map((issue) => (
-          <article className={`issue-item issue-${issueTone(issue)}`} key={issue.id}>
-            <div className="issue-label"><Badge tone={issueTone(issue)}>{issueLabel(issue)}</Badge></div>
+          <IssueEditor
+            key={issue.id}
+            className={`issue-item issue-${issueTone(issue)}`}
+            issue={{
+              id: issue.id,
+              title: issue.title,
+              projectId: issue.projectId,
+              severity: issue.severity,
+              state: issue.state,
+              detail: issue.detail,
+              nextStep: issue.nextStep,
+              prevention: issue.prevention,
+            }}
+            projects={data.projects.map(({ id, name }) => ({ id, name }))}
+          >
+            <div className="issue-label"><Badge variant={issueTone(issue)}>{issueLabel(issue)}</Badge></div>
             <div className="issue-copy">
               <div className="issue-title-row">
                 <strong className="type-body">{issue.title}</strong>
                 {issue.projectName && <span className="issue-project type-caption">{issue.projectName}</span>}
               </div>
-              <p className="issue-next-step type-caption">{issue.nextStep || issue.detail || "No update provided"}</p>
+              <div className="issue-details type-caption">
+                <p><strong>Detail</strong><span>{issue.detail || "—"}</span></p>
+                {issue.state !== "CLOSED" && <p><strong>Next step</strong><span>{issue.nextStep || "—"}</span></p>}
+                {issue.state === "CLOSED" && <p><strong>Prevention</strong><span>{issue.prevention || "—"}</span></p>}
+              </div>
             </div>
-            <form action={toggleIssueStateAction} className="issue-state-form">
-              <input type="hidden" name="id" value={issue.id} />
-              <input type="hidden" name="nextState" value={issue.state === "OPEN" ? "CLOSED" : "OPEN"} />
-              <button type="submit" title={issue.state === "OPEN" ? "Mark done" : "Reopen issue"} aria-label={issue.state === "OPEN" ? "Mark issue done" : "Reopen issue"}>
-                {issue.state === "OPEN" ? <Check size={16} /> : <CircleAlert size={16} />}
-              </button>
-            </form>
-          </article>
+          </IssueEditor>
         ))}
-        {data.issues.length === 0 && <p className="empty-state">No issues reported. Add an item when a team needs help.</p>}
+        {data.issues.length === 0 && (
+          <Empty className="dashboard-empty">
+            <EmptyMedia variant="icon"><CircleAlert size={16} /></EmptyMedia>
+            <EmptyHeader>
+              <EmptyTitle>No issues reported</EmptyTitle>
+              <EmptyDescription>Add an issue when the team needs help.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        )}
       </div>
     </Card>
   );
@@ -234,7 +197,6 @@ function ActivityCard({
   data: DashboardData;
 }) {
   const entries = data.activities.filter((item) => item.section === section);
-  const isYesterday = section === "YESTERDAY";
 
   return (
     <Card className="activity-card">
@@ -242,38 +204,36 @@ function ActivityCard({
         <div>
           <h2 className="type-h2">{title}</h2>
         </div>
-        <details className="add-menu">
-          <summary className="icon-button" title="Add activity" aria-label={`Add item to ${title}`}><Plus size={18} /></summary>
-          <form action={createActivityAction} className="popover-form activity-form">
-            <h3 className="type-h3">Add activity</h3>
-            <input type="hidden" name="section" value={section} />
-            <label className="field-label">Description<input name="content" minLength={2} maxLength={220} required placeholder="Activity or shared topic" /></label>
-            <Button type="submit"><Plus size={15} /> Add item</Button>
-          </form>
-        </details>
+        <AddActivityMenu section={section} />
       </div>
       <ul className="activity-list">
         {entries.map((activity) => (
-          <li className={activity.completed ? "activity-done" : ""} key={activity.id}>
-            <form action={toggleActivityAction}>
-              <input type="hidden" name="id" value={activity.id} />
-              <input type="hidden" name="completed" value={String(!activity.completed)} />
-              <button type="submit" aria-label={activity.completed ? `Mark ${activity.content} incomplete` : `Mark ${activity.content} complete`}>
-                {activity.completed ? <Check size={15} /> : <span className="activity-bullet" />}
-              </button>
-            </form>
+          <ActivityEditor key={activity.id} activity={activity}>
+            <ActivityCompletionToggle activityId={activity.id} content={activity.content} completed={activity.completed} />
             <span className="type-body">{activity.content}</span>
-          </li>
+          </ActivityEditor>
         ))}
-        {entries.length === 0 && <li className="empty-state">No items added yet.</li>}
+        {entries.length === 0 && (
+          <li className="activity-empty-item">
+            <Empty className="dashboard-empty">
+              <EmptyMedia variant="icon"><ListTodo size={16} /></EmptyMedia>
+              <EmptyHeader>
+                <EmptyTitle>No items yet</EmptyTitle>
+                <EmptyDescription>Add an item to this section.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          </li>
+        )}
       </ul>
     </Card>
   );
 }
 
 export function Dashboard({ data }: { data: DashboardData }) {
+  const reportDateKey = data.reportDateKey;
   const delayCount = data.projects.filter((project) => project.status === "DELAY").length;
-  const inProgressCount = data.projects.length - delayCount;
+  const finishCount = data.projects.filter((project) => project.status === "FINISH").length;
+  const inProgressCount = data.projects.length - delayCount - finishCount;
   const openIssues = data.issues.filter((issue) => issue.state === "OPEN");
   const highCount = openIssues.filter((issue) => issue.severity === "HIGH").length;
   const mediumCount = openIssues.filter((issue) => issue.severity === "MEDIUM").length;
@@ -282,13 +242,14 @@ export function Dashboard({ data }: { data: DashboardData }) {
 
   return (
     <main className="page-shell">
+      <DailyRefresh initialDateKey={reportDateKey} />
       <section className="dashboard-frame" aria-label="IT morning dashboard">
         <header className="dashboard-topbar">
           <div className="dashboard-name">
             <h2 className="type-h2">IT Daily Status &amp; Operations Summary</h2>
           </div>
           <div className="report-meta type-caption">
-            <ReportDatePicker initialDateKey={getReportDateKey()} />
+            <ReportDatePicker initialDateKey={reportDateKey} />
             <Link
               href="/settings/theme"
               className="button button-secondary theme-topbar-button"
@@ -307,6 +268,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
             >
               <SummaryBreakdown
                 label={`${data.projects.length} Projects, ${delayCount} Delayed, ${inProgressCount} In Progress`}
+                columns={3}
                 items={[
                   { value: data.projects.length, label: "Projects", tone: "neutral" },
                   { value: delayCount, label: "Delayed", tone: "danger" },

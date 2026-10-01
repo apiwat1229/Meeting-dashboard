@@ -5,6 +5,8 @@ import { RotateCcw, Save } from "lucide-react";
 import { saveThemeAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ComboboxSelect } from "@/components/ui/combobox";
+import { Input } from "@/components/ui/input";
 import { applyThemeToDocument, defaultTheme, fontFamilyOptions } from "@/lib/theme";
 import type { ThemeConfig, TypographyRole } from "@/lib/theme";
 
@@ -36,6 +38,12 @@ const roleLabels: Record<TypographyRole, { title: string; sample: string; descri
 };
 
 const initialActionState = { ok: false, message: "" };
+const weightOptions = [
+  { value: "400", label: "Regular · 400" },
+  { value: "500", label: "Medium · 500" },
+  { value: "600", label: "Semibold · 600" },
+  { value: "700", label: "Bold · 700" },
+];
 
 export function ThemeSettingsForm({ initialTheme }: { initialTheme: ThemeConfig }) {
   const [theme, setTheme] = useState(initialTheme);
@@ -89,7 +97,7 @@ export function ThemeSettingsForm({ initialTheme }: { initialTheme: ThemeConfig 
               {(Object.keys(colorLabels) as (keyof ThemeConfig["colors"])[]).map((key) => (
                 <label className="color-control" key={key}>
                   <span className="color-swatch" style={{ backgroundColor: theme.colors[key] }}>
-                    <input aria-label={colorLabels[key]} type="color" value={theme.colors[key]} onChange={(event) => updateColor(key, event.target.value)} />
+                    <Input aria-label={colorLabels[key]} type="color" value={theme.colors[key]} onChange={(event) => updateColor(key, event.target.value)} />
                   </span>
                   <span className="color-control-copy">
                     <span className="type-body">{colorLabels[key]}</span>
@@ -117,23 +125,16 @@ export function ThemeSettingsForm({ initialTheme }: { initialTheme: ThemeConfig 
                   </div>
                   <div className="type-role-fields">
                     <label className="field-label">Font family
-                      <select value={theme.typography[role].family} onChange={(event) => updateTypography(role, "family", event.target.value as ThemeConfig["typography"][typeof role]["family"])}>
-                        {fontFamilyOptions.map((font) => <option key={font.value} value={font.value}>{font.label}</option>)}
-                      </select>
+                      <ComboboxSelect options={fontFamilyOptions} value={theme.typography[role].family} onValueChange={(value) => { if (value !== null) updateTypography(role, "family", value as ThemeConfig["typography"][typeof role]["family"]); }} searchPlaceholder="Search fonts..." emptyMessage="No matching fonts." />
                     </label>
                     <label className="field-label">Size · px
-                      <input type="number" min="10" max="64" value={theme.typography[role].size} onChange={(event) => updateTypography(role, "size", Number(event.target.value))} />
+                      <Input type="number" min="10" max="64" value={theme.typography[role].size} onChange={(event) => updateTypography(role, "size", Number(event.target.value))} />
                     </label>
                     <label className="field-label">Weight
-                      <select value={theme.typography[role].weight} onChange={(event) => updateTypography(role, "weight", event.target.value as ThemeConfig["typography"][typeof role]["weight"])}>
-                        <option value="400">Regular · 400</option>
-                        <option value="500">Medium · 500</option>
-                        <option value="600">Semibold · 600</option>
-                        <option value="700">Bold · 700</option>
-                      </select>
+                      <ComboboxSelect options={weightOptions} value={String(theme.typography[role].weight)} onValueChange={(value) => { if (value !== null) updateTypography(role, "weight", value as ThemeConfig["typography"][typeof role]["weight"]); }} />
                     </label>
                     <label className="field-label">Line height
-                      <input type="number" min="1" max="2" step="0.05" value={theme.typography[role].lineHeight} onChange={(event) => updateTypography(role, "lineHeight", Number(event.target.value))} />
+                      <Input type="number" min="1" max="2" step="0.05" value={theme.typography[role].lineHeight} onChange={(event) => updateTypography(role, "lineHeight", Number(event.target.value))} />
                     </label>
                   </div>
                 </section>
@@ -150,10 +151,10 @@ export function ThemeSettingsForm({ initialTheme }: { initialTheme: ThemeConfig 
               </div>
             </div>
             <div className="layout-controls">
-              <label className="field-label">Card corner radius · px<input type="number" min="6" max="28" value={theme.layout.radius} onChange={(event) => updateLayout("radius", Number(event.target.value))} /></label>
-              <label className="field-label">Section gap · px<input type="number" min="8" max="40" value={theme.layout.gap} onChange={(event) => updateLayout("gap", Number(event.target.value))} /></label>
-              <label className="field-label">Card padding · px<input type="number" min="12" max="36" value={theme.layout.cardPadding} onChange={(event) => updateLayout("cardPadding", Number(event.target.value))} /></label>
-              <label className="field-label">Maximum page width · px<input type="number" min="1080" max="1920" step="20" value={theme.layout.maxWidth} onChange={(event) => updateLayout("maxWidth", Number(event.target.value))} /></label>
+              <label className="field-label">Card corner radius · px<Input type="number" min="6" max="28" value={theme.layout.radius} onChange={(event) => updateLayout("radius", Number(event.target.value))} /></label>
+              <label className="field-label">Section gap · px<Input type="number" min="8" max="40" value={theme.layout.gap} onChange={(event) => updateLayout("gap", Number(event.target.value))} /></label>
+              <label className="field-label">Card padding · px<Input type="number" min="12" max="36" value={theme.layout.cardPadding} onChange={(event) => updateLayout("cardPadding", Number(event.target.value))} /></label>
+              <label className="field-label">Maximum page width · px<Input type="number" min="1080" max="3840" step="20" value={theme.layout.maxWidth} onChange={(event) => updateLayout("maxWidth", Number(event.target.value))} /></label>
             </div>
           </Card>
         </div>

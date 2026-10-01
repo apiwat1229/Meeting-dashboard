@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { connection } from "next/server";
 import { getThemeConfig } from "@/lib/data";
 import { themeCssVariables } from "@/lib/theme";
+import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,7 +17,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
 
   return (
     <html lang="th" style={themeCssVariables(theme)}>
-      <body>{children}</body>
+      <body><ToastProvider>{children}</ToastProvider></body>
     </html>
   );
 }

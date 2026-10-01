@@ -12,6 +12,18 @@ if (!connectionString) {
 const themePath = new URL("../src/lib/theme-default.json", import.meta.url);
 const defaultTheme = JSON.parse(await readFile(fileURLToPath(themePath), "utf8"));
 const client = new Client({ connectionString });
+const dateParts = Object.fromEntries(
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date()).map((part) => [part.type, part.value]),
+);
+const todayDate = `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+const yesterdayDate = new Date(
+  Date.UTC(Number(dateParts.year), Number(dateParts.month) - 1, Number(dateParts.day) - 1),
+).toISOString().slice(0, 10);
 
 try {
   await client.connect();
@@ -23,7 +35,7 @@ try {
       `INSERT INTO projects (name, status, yesterday, today, progress, sort_order)
        VALUES
         ('PC Renewal 2027', 'ON_TRACK', 'Vendor check', 'Investment form', 78, 1),
-        ('Website', 'ATTENTION', 'Page design', 'User test', 55, 2),
+        ('Website', 'ON_TRACK', 'Page design', 'User test', 55, 2),
         ('HR System', 'DELAY', 'Login error found', 'Fix & test', 38, 3),
         ('CCTV Upgrade', 'ON_TRACK', 'Camera layout', 'Continue', 70, 4)
        RETURNING id, name`,
@@ -36,22 +48,23 @@ try {
         ($1, 'HR System login error', 'HIGH', 'OPEN', 'Some users cannot sign in to the HR system.', 'Fix today / Test by 15:00', 1),
         ($2, 'Warehouse Wi-Fi weak', 'MEDIUM', 'OPEN', 'Signal drops in the warehouse area.', 'Check AP settings / Monitor', 2),
         ($2, 'Website UAT delay risk', 'MEDIUM', 'OPEN', 'Department review has not been completed.', 'Waiting for department review', 3),
-        (NULL, 'Printer error ACC', 'LOW', 'CLOSED', 'Accounting printer issue has been resolved.', 'Resolved / Skip explanation', 4)`,
+        (NULL, 'Printer error ACC', 'MEDIUM', 'CLOSED', 'Accounting printer issue has been resolved.', 'Resolved / Skip explanation', 4)`,
       [ids["HR System"], ids.Website],
     );
 
     await client.query(
-      `INSERT INTO activities (section, content, completed, sort_order)
+      `INSERT INTO activities (section, content, completed, sort_order, activity_date)
        VALUES
-        ('YESTERDAY', 'User interview: HR', TRUE, 1),
-        ('YESTERDAY', 'PC setup ×2', TRUE, 2),
-        ('YESTERDAY', 'Network issue resolved', TRUE, 3),
-        ('TODAY', 'Vendor meeting 10:00', FALSE, 1),
-        ('TODAY', 'PC setup ×3', FALSE, 2),
-        ('TODAY', 'Warehouse Wi-Fi check', FALSE, 3),
-        ('OTHER', 'Antivirus quotation received', FALSE, 1),
-        ('OTHER', 'Server maintenance: 3 Oct', FALSE, 2),
-        ('OTHER', 'M365 license review started', FALSE, 3)`,
+        ('YESTERDAY', 'User interview: HR', TRUE, 1, $1::date),
+        ('YESTERDAY', 'PC setup ×2', TRUE, 2, $1::date),
+        ('YESTERDAY', 'Network issue resolved', TRUE, 3, $1::date),
+        ('TODAY', 'Vendor meeting 10:00', FALSE, 1, $2::date),
+        ('TODAY', 'PC setup ×3', FALSE, 2, $2::date),
+        ('TODAY', 'Warehouse Wi-Fi check', FALSE, 3, $2::date),
+        ('OTHER', 'Antivirus quotation received', FALSE, 1, $2::date),
+        ('OTHER', 'Server maintenance: 3 Oct', FALSE, 2, $2::date),
+        ('OTHER', 'M365 license review started', FALSE, 3, $2::date)`,
+      [yesterdayDate, todayDate],
     );
   }
 

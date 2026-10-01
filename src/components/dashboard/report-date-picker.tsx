@@ -68,7 +68,7 @@ export function ReportDatePicker({ initialDateKey }: { initialDateKey: string })
             setOpen(false);
           }}
           timeZone="Asia/Bangkok"
-          captionLayout="dropdown"
+          captionLayout="label"
           className="report-calendar"
         />
       </PopoverContent>

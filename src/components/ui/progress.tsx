@@ -1,15 +1,19 @@
-export function Progress({ value, tone = "success" }: { value: number; tone?: "success" | "warning" | "danger" }) {
+"use client";
+
+import { Progress as ProgressPrimitive } from "@base-ui/react/progress";
+
+export function Progress({ value, tone = "success" }: { value: number; tone?: "success" | "warning" | "danger" | "finish" }) {
   const safeValue = Math.min(100, Math.max(0, value));
   return (
-    <div
+    <ProgressPrimitive.Root
+      data-slot="progress"
       className="progress-track"
-      role="progressbar"
-      aria-valuenow={safeValue}
-      aria-valuemin={0}
-      aria-valuemax={100}
+      value={safeValue}
       aria-label={`Project progress ${safeValue}%`}
     >
-      <span className={`progress-fill progress-${tone}`} style={{ width: `${safeValue}%` }} />
-    </div>
+      <ProgressPrimitive.Track data-slot="progress-track" className="progress-track-inner">
+        <ProgressPrimitive.Indicator data-slot="progress-indicator" className={`progress-fill progress-${tone}`} />
+      </ProgressPrimitive.Track>
+    </ProgressPrimitive.Root>
   );
 }

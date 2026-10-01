@@ -1,8 +1,9 @@
-import { boolean, check, integer, jsonb, pgEnum, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, check, date, integer, jsonb, pgEnum, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { ThemeConfig } from "@/lib/theme";
 
-export const projectStatus = pgEnum("project_status", ["ON_TRACK", "ATTENTION", "DELAY"]);
+export const projectStatus = pgEnum("project_status", ["ON_TRACK", "ATTENTION", "DELAY", "FINISH"]);
+export const projectTaskStatus = pgEnum("project_task_status", ["TODO", "IN_PROGRESS", "DONE"]);
 export const issueSeverity = pgEnum("issue_severity", ["HIGH", "MEDIUM", "LOW"]);
 export const issueState = pgEnum("issue_state", ["OPEN", "CLOSED"]);
 export const activitySection = pgEnum("activity_section", ["YESTERDAY", "TODAY", "OTHER"]);
@@ -23,6 +24,16 @@ export const projects = pgTable(
   (table) => [check("projects_progress_range", sql`${table.progress} between 0 and 100`)],
 );
 
+export const projectTasks = pgTable("project_tasks", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  title: varchar("title", { length: 220 }).notNull(),
+  status: projectTaskStatus("status").notNull().default("TODO"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const issues = pgTable(
   "issues",
   {
@@ -33,6 +44,7 @@ export const issues = pgTable(
     state: issueState("state").notNull().default("OPEN"),
     detail: text("detail").notNull().default(""),
     nextStep: text("next_step").notNull().default(""),
+    prevention: text("prevention").notNull().default(""),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -44,6 +56,7 @@ export const activities = pgTable("activities", {
   section: activitySection("section").notNull(),
   content: varchar("content", { length: 220 }).notNull(),
   completed: boolean("completed").notNull().default(false),
+  activityDate: date("activity_date", { mode: "string" }).notNull().defaultNow(),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

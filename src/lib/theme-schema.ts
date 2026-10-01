@@ -39,7 +39,7 @@ export const themeConfigSchema = z.object({
     radius: z.number().min(6).max(28),
     gap: z.number().min(8).max(40),
     cardPadding: z.number().min(12).max(36),
-    maxWidth: z.number().min(1080).max(1920),
+    maxWidth: z.number().min(1080).max(3840),
   }),
 });
 
