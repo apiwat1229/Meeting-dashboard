@@ -3,12 +3,16 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ImagePlus, Trash2, X } from "lucide-react";
+import { updateProjectScheduleAction } from "@/app/actions";
+import { CalendarDays, ImagePlus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/components/ui/toast";
+import { ProjectTaskManager } from "@/components/dashboard/project-subtasks";
 
 type ImageEntityType = "issue" | "activity";
 
@@ -132,18 +136,18 @@ export function IssueDetailsDialog({ issue, open, onOpenChange }: { issue: Issue
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="detail-dialog-content" onClick={(event) => event.stopPropagation()}>
         <div className="detail-dialog-header">
-          <div>
-            <DialogTitle>{issue.title}</DialogTitle>
+          <div className="issue-detail-title-group">
+            <div className="issue-detail-title-row">
+              <DialogTitle>{issue.title}</DialogTitle>
+              <Badge variant={issue.state === "CLOSED" ? "success" : issue.severity === "HIGH" ? "danger" : issue.severity === "LOW" ? "neutral" : "warning"}>
+                {issue.state === "CLOSED" ? "Done" : issue.severity === "HIGH" ? "High" : issue.severity === "LOW" ? "Low" : "Medium"}
+              </Badge>
+            </div>
             <DialogDescription>Issue details</DialogDescription>
           </div>
           <DialogClose className="icon-button project-tasks-close" aria-label="Close issue details"><X size={17} /></DialogClose>
         </div>
-        <div className="detail-badges">
-          <Badge variant={issue.state === "CLOSED" ? "success" : issue.severity === "HIGH" ? "danger" : issue.severity === "LOW" ? "neutral" : "warning"}>
-            {issue.state === "CLOSED" ? "Done" : issue.severity === "HIGH" ? "High" : issue.severity === "LOW" ? "Low" : "Medium"}
-          </Badge>
-          {issue.projectName && <span className="detail-project">{issue.projectName}</span>}
-        </div>
+        {issue.projectName && <div className="detail-badges"><span className="detail-project">{issue.projectName}</span></div>}
         <section className="detail-copy-section">
           <h3>Detail</h3>
           <p>{issue.detail || "No detail provided."}</p>
@@ -189,12 +193,12 @@ export function ActivityDetailsDialog({ activity, open, onOpenChange }: { activi
           </div>
           <DialogClose className="icon-button project-tasks-close" aria-label="Close activity details"><X size={17} /></DialogClose>
         </div>
-        <div className="detail-badges">
-          <Badge variant={activity.completed ? "success" : "neutral"}>{activity.completed ? "Done" : "In progress"}</Badge>
+        <div className="detail-badges activity-detail-badges">
+          <Badge variant={activity.completed ? "info" : "success"}>{activity.completed ? "Done" : "In progress"}</Badge>
           <span className="detail-project">{sectionLabels[activity.section]}</span>
           <span className="detail-project">{formatActivityDate(activity.activityDate)}</span>
         </div>
-        <section className="detail-copy-section">
+        <section className="detail-copy-section activity-detail-copy">
           <h3>Description</h3>
           <p>{activity.content}</p>
         </section>
@@ -211,21 +215,167 @@ type ProjectDetails = {
   progress: number;
   yesterday: string;
   today: string;
-  tasks: Array<{ id: number; title: string; status: "TODO" | "IN_PROGRESS" | "DONE" }>;
+  startDate: string | null;
+  endDate: string | null;
+  tasks: Array<{ id: number; projectId: number; title: string; status: "TODO" | "IN_PROGRESS" | "DONE" }>;
 };
 
-const projectStatusInfo: Record<ProjectDetails["status"], { label: string; variant: "success" | "warning" | "danger" | "neutral"; fill: "success" | "warning" | "danger" | "finish" }> = {
-  ON_TRACK: { label: "Ongoing", variant: "success", fill: "success" },
-  ATTENTION: { label: "Needs attention", variant: "warning", fill: "warning" },
-  DELAY: { label: "Delayed", variant: "danger", fill: "danger" },
-  FINISH: { label: "Early completion", variant: "neutral", fill: "finish" },
+const projectStatusInfo: Record<ProjectDetails["status"], { fill: "success" | "warning" | "danger" | "finish" }> = {
+  ON_TRACK: { fill: "success" },
+  ATTENTION: { fill: "warning" },
+  DELAY: { fill: "danger" },
+  FINISH: { fill: "finish" },
 };
 
-const taskStatusInfo: Record<ProjectDetails["tasks"][number]["status"], { label: string; variant: "success" | "warning" | "neutral" }> = {
-  TODO: { label: "To do", variant: "neutral" },
-  IN_PROGRESS: { label: "In progress", variant: "warning" },
-  DONE: { label: "Done", variant: "success" },
-};
+function formatProjectDate(dateKey: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${dateKey}T00:00:00Z`));
+}
+
+function projectDateFromKey(dateKey: string) {
+  return new Date(`${dateKey}T12:00:00.000Z`);
+}
+
+function projectDateKeyFromDate(date: Date) {
+  const values = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Bangkok",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .formatToParts(date)
+      .map((part) => [part.type, part.value]),
+  );
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function projectDateLabel(project: Pick<ProjectDetails, "startDate" | "endDate">) {
+  const parts = [
+    project.startDate ? `Start Date: ${formatProjectDate(project.startDate)}` : "",
+    project.endDate ? `End Date: ${formatProjectDate(project.endDate)}` : "",
+  ].filter(Boolean);
+  if (parts.length === 0) return "Start Date: not set · End Date: not set";
+  return parts.join(" · ");
+}
+
+function ScheduleDatePicker({
+  label,
+  dateKey,
+  otherDateKey,
+  disabled,
+  onSelect,
+}: {
+  label: "Start" | "End";
+  dateKey: string;
+  otherDateKey: string;
+  disabled: boolean;
+  onSelect: (dateKey: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedDate = dateKey ? projectDateFromKey(dateKey) : undefined;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        type="button"
+        className="button button-secondary project-date-picker-trigger"
+        aria-label={`Choose project ${label.toLowerCase()} date`}
+        disabled={disabled}
+      >
+        <CalendarDays size={13} aria-hidden="true" />
+        <span className="project-date-picker-label">{label}</span>
+        <span>{dateKey ? formatProjectDate(dateKey) : "Select date"}</span>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        positionerClassName="project-date-popover-positioner"
+        className="date-picker-popover project-date-popover"
+      >
+        <Calendar
+          mode="single"
+          selected={selectedDate}
+          onSelect={(date) => {
+            if (!date) return;
+            onSelect(projectDateKeyFromDate(date));
+            setOpen(false);
+          }}
+          disabled={(date) => {
+            const dateKeyValue = projectDateKeyFromDate(date);
+            return label === "Start"
+              ? Boolean(otherDateKey && dateKeyValue > otherDateKey)
+              : Boolean(otherDateKey && dateKeyValue < otherDateKey);
+          }}
+          timeZone="Asia/Bangkok"
+          captionLayout="label"
+          className="report-calendar"
+        />
+        {dateKey && (
+          <div className="project-date-popover-footer">
+            <Button type="button" variant="ghost" onClick={() => { onSelect(""); setOpen(false); }}>Clear date</Button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ProjectSchedulePicker({ projectId, startDate, endDate }: { projectId: number; startDate: string | null; endDate: string | null }) {
+  const [dates, setDates] = useState({ startDate: startDate ?? "", endDate: endDate ?? "" });
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => setDates({ startDate: startDate ?? "", endDate: endDate ?? "" }), [projectId, startDate, endDate]);
+
+  async function saveDate(field: "startDate" | "endDate", value: string) {
+    const previous = dates;
+    const next = { ...dates, [field]: value };
+    setDates(next);
+    setPending(true);
+
+    const formData = new FormData();
+    formData.set("id", String(projectId));
+    formData.set("startDate", next.startDate);
+    formData.set("endDate", next.endDate);
+
+    try {
+      const result = await updateProjectScheduleAction(formData);
+      if (result.ok) {
+        toast.success(result.message);
+      } else {
+        setDates(previous);
+        toast.error(result.message);
+      }
+    } catch {
+      setDates(previous);
+      toast.error("Could not update the project dates.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="project-date-range" aria-label={projectDateLabel({ startDate: dates.startDate || null, endDate: dates.endDate || null })}>
+      <ScheduleDatePicker
+        label="Start"
+        dateKey={dates.startDate}
+        otherDateKey={dates.endDate}
+        disabled={pending}
+        onSelect={(value) => { void saveDate("startDate", value); }}
+      />
+      <ScheduleDatePicker
+        label="End"
+        dateKey={dates.endDate}
+        otherDateKey={dates.startDate}
+        disabled={pending}
+        onSelect={(value) => { void saveDate("endDate", value); }}
+      />
+    </div>
+  );
+}
 
 export function ProjectDetailsDialog({ project, open, onOpenChange }: { project: ProjectDetails; open: boolean; onOpenChange: (open: boolean) => void }) {
   const status = projectStatusInfo[project.status];
@@ -234,19 +384,25 @@ export function ProjectDetailsDialog({ project, open, onOpenChange }: { project:
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="detail-dialog-content project-details-dialog" onClick={(event) => event.stopPropagation()}>
-        <div className="detail-dialog-header">
-          <div>
-            <DialogTitle>{project.name}</DialogTitle>
-            <DialogDescription>Project overview and work details</DialogDescription>
+        <div className="detail-dialog-header project-detail-header">
+          <div className="project-detail-header-copy">
+            <div className="project-detail-title-row">
+              <DialogTitle>{project.name}</DialogTitle>
+            </div>
+          </div>
+          <div className="project-detail-meta">
+            <ProjectSchedulePicker projectId={project.id} startDate={project.startDate} endDate={project.endDate} />
           </div>
           <DialogClose className="icon-button project-tasks-close" aria-label="Close project details"><X size={17} /></DialogClose>
         </div>
-        <div className="detail-badges">
-          <Badge variant={status.variant} className={project.status === "FINISH" ? "project-detail-status-finish" : ""}>{status.label}</Badge>
-          <span className="detail-project">{project.tasks.length} {project.tasks.length === 1 ? "task" : "tasks"} · {completedTasks} done</span>
-        </div>
         <section className="detail-copy-section project-detail-progress">
-          <div className="project-detail-progress-heading"><h3>Progress</h3><strong>{project.progress}%</strong></div>
+          <div className="project-detail-progress-heading">
+            <div className="project-detail-progress-label">
+              <h3>Progress</h3>
+              <span className="project-task-summary">{project.tasks.length} {project.tasks.length === 1 ? "task" : "tasks"} · {completedTasks} done</span>
+            </div>
+            <strong>{project.progress}%</strong>
+          </div>
           <Progress value={project.progress} tone={status.fill} />
         </section>
         <div className="project-detail-updates">
@@ -259,24 +415,7 @@ export function ProjectDetailsDialog({ project, open, onOpenChange }: { project:
             <p>{project.today || "No update recorded."}</p>
           </section>
         </div>
-        <section className="detail-copy-section project-detail-task-section">
-          <h3>Subtasks</h3>
-          {project.tasks.length ? (
-            <ul className="project-detail-task-list">
-              {project.tasks.map((task) => {
-                const taskStatus = taskStatusInfo[task.status];
-                return (
-                  <li className="project-detail-task" key={task.id}>
-                    <span>{task.title}</span>
-                    <Badge variant={taskStatus.variant}>{taskStatus.label}</Badge>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p>No subtasks have been added.</p>
-          )}
-        </section>
+        <ProjectTaskManager projectId={project.id} projectName={project.name} tasks={project.tasks} />
       </DialogContent>
     </Dialog>
   );

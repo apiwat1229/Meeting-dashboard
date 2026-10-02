@@ -16,13 +16,35 @@ import { IssueEditor } from "@/components/dashboard/issue-editor";
 import { ActivityEditor, AddActivityMenu } from "@/components/dashboard/activity-crud";
 import { ActivityStatusIndicator } from "@/components/dashboard/activity-status-indicator";
 import { AddProjectMenu, ProjectEditor } from "@/components/dashboard/project-crud";
-import { ProjectSubtasks } from "@/components/dashboard/project-subtasks";
 import { DailyRefresh } from "@/components/dashboard/daily-refresh";
 import { FullScreenToggle } from "@/components/dashboard/full-screen-toggle";
 
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
 type ProjectStatus = DashboardData["projects"][number]["status"];
 type IssueRow = DashboardData["issues"][number];
+
+function formatProjectDate(dateKey: string, includeYear = true) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    ...(includeYear ? { year: "numeric" as const } : {}),
+    timeZone: "UTC",
+  }).format(new Date(`${dateKey}T00:00:00Z`));
+}
+
+function formatProjectDateRange(startDate: string | null, endDate: string | null) {
+  if (!startDate && !endDate) return "—";
+  if (!startDate) return `— - ${formatProjectDate(endDate!)}`;
+  if (!endDate) return `${formatProjectDate(startDate)} - —`;
+
+  const sameYear = startDate.slice(0, 4) === endDate.slice(0, 4);
+  const sameMonth = startDate.slice(0, 7) === endDate.slice(0, 7);
+  const startLabel = sameMonth
+    ? String(Number(startDate.slice(8, 10)))
+    : formatProjectDate(startDate, !sameYear);
+
+  return `${startLabel} - ${formatProjectDate(endDate)}`;
+}
 
 function statusTone(status: ProjectStatus): "success" | "danger" | "finish" {
   if (status === "DELAY") return "danger";
@@ -69,12 +91,13 @@ function ProjectRow({ project, tasks, index }: { project: DashboardData["project
   return (
     <ProjectEditor project={project} tasks={tasks}>
       <span className="project-index type-body" role="cell">{index + 1}.</span>
-      <div className="project-name" role="cell"><ProjectSubtasks projectId={project.id} projectName={project.name} tasks={tasks} /></div>
+      <div className="project-name type-body" role="cell">{project.name}</div>
       <span className="project-work type-body" role="cell">{project.yesterday || "—"}</span>
       <span className="project-work type-body" role="cell">{project.today || "—"}</span>
+      <span className="project-schedule-range type-caption" role="cell">{formatProjectDateRange(project.startDate, project.endDate)}</span>
       <div className="project-progress-cell" role="cell">
-        <Progress value={project.progress} tone={statusTone(project.status)} />
         <span className="progress-value type-caption">{project.progress}%</span>
+        <Progress value={project.progress} tone={statusTone(project.status)} />
       </div>
     </ProjectEditor>
   );
@@ -100,6 +123,7 @@ function ProjectSection({ data }: { data: DashboardData }) {
           <span role="columnheader">Project</span>
           <span role="columnheader">Yesterday</span>
           <span role="columnheader">Today</span>
+          <span role="columnheader">Start / End</span>
           <span role="columnheader">Progress</span>
         </div>
         <div className="project-body" role="rowgroup">
@@ -113,7 +137,7 @@ function ProjectSection({ data }: { data: DashboardData }) {
           ))}
           {data.projects.length === 0 && (
             <div className="project-empty-row" role="row">
-              <div role="cell" aria-colspan={5}>
+              <div role="cell" aria-colspan={6}>
                 <Empty className="dashboard-empty">
                   <EmptyMedia variant="icon"><FolderKanban size={16} /></EmptyMedia>
                   <EmptyHeader>
@@ -145,7 +169,7 @@ function IssueSection({ data }: { data: DashboardData }) {
         <AddIssueMenu projects={data.projects.map(({ id, name }) => ({ id, name }))} />
       </div>
       <div className="issue-list">
-        {data.issues.map((issue) => (
+        {data.issues.map((issue, index) => (
           <IssueEditor
             key={issue.id}
             className={`issue-item issue-${issueTone(issue)}`}
@@ -163,6 +187,7 @@ function IssueSection({ data }: { data: DashboardData }) {
             }}
             projects={data.projects.map(({ id, name }) => ({ id, name }))}
           >
+            <span className="issue-index" aria-hidden="true">{index + 1}.</span>
             <div className="issue-copy">
               <div className="issue-title-row">
                 <strong className="type-body">{issue.title}</strong>
@@ -214,10 +239,11 @@ function ActivityCard({
         <AddActivityMenu section={section} />
       </div>
       <ul className="activity-list">
-        {entries.map((activity) => (
+        {entries.map((activity, index) => (
           <ActivityEditor key={activity.id} activity={activity}>
+            <span className="activity-number" aria-hidden="true">{index + 1}.</span>
             <ActivityStatusIndicator completed={activity.completed} />
-            <span className="type-body">{activity.content}</span>
+            <span className="activity-content type-body">{activity.content}</span>
           </ActivityEditor>
         ))}
         {entries.length === 0 && (

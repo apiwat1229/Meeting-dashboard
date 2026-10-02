@@ -1,13 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { ListTodo, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ListTodo, Plus, X } from "lucide-react";
 import { createProjectTaskAction, deleteProjectTaskAction, updateProjectTaskAction } from "@/app/actions";
-import { ConfirmActionDialog } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ComboboxSelect } from "@/components/ui/combobox";
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ContextMenu } from "@/components/ui/context-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
@@ -26,13 +24,13 @@ const statusOptions = [
   { value: "DONE", label: "Done" },
 ] as const;
 
-const taskStatusInfo: Record<TaskStatus, { label: string; variant: "neutral" | "warning" | "success" }> = {
-  TODO: { label: "To do", variant: "neutral" },
-  IN_PROGRESS: { label: "In progress", variant: "warning" },
-  DONE: { label: "Done", variant: "success" },
+const taskStatusLabel: Record<TaskStatus, string> = {
+  TODO: "To do",
+  IN_PROGRESS: "In progress",
+  DONE: "Done",
 };
 
-export function ProjectSubtasks({
+export function ProjectTaskManager({
   projectId,
   projectName,
   tasks,
@@ -41,7 +39,6 @@ export function ProjectSubtasks({
   projectName: string;
   tasks: ProjectTask[];
 }) {
-  const [open, setOpen] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
   const [deleteTask, setDeleteTask] = useState<ProjectTask | null>(null);
@@ -74,12 +71,11 @@ export function ProjectSubtasks({
     }
   }
 
-  async function deleteTaskActionHandler() {
-    if (!deleteTask) return;
+  async function removeTask(task: ProjectTask) {
     setPending(true);
     try {
       const formData = new FormData();
-      formData.set("id", String(deleteTask.id));
+      formData.set("id", String(task.id));
       formData.set("projectId", String(projectId));
       const result = await deleteProjectTaskAction(formData);
       if (result.ok) {
@@ -97,98 +93,92 @@ export function ProjectSubtasks({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => {
-      setOpen(nextOpen);
-      if (!nextOpen) {
-        setShowCreate(false);
-        setEditingTask(null);
-      }
-    }}>
-      <DialogTrigger className="project-name-trigger type-body" aria-label={`View subtasks for ${projectName}`} title={`View subtasks for ${projectName}`} onClick={(event) => event.stopPropagation()}>
-        <span>{projectName}</span>
-        <ListTodo size={15} aria-hidden="true" />
-      </DialogTrigger>
-      <DialogContent className="project-tasks-dialog" onClick={(event) => event.stopPropagation()}>
-        <div className="project-tasks-header">
-          <div>
-            <DialogTitle>{projectName}</DialogTitle>
-            <DialogDescription>Subtasks for this project</DialogDescription>
-          </div>
-          <DialogClose className="icon-button project-tasks-close" aria-label="Close project subtasks"><X size={17} /></DialogClose>
+    <section className="detail-copy-section project-detail-task-section" aria-label={`${projectName} subtasks`}>
+      <div className="project-task-manager-heading">
+        <div>
+          <h3>Subtasks</h3>
+          <span className="type-caption">{tasks.length} {tasks.length === 1 ? "task" : "tasks"}</span>
         </div>
+        <Button type="button" variant="secondary" className="project-task-add-trigger" onClick={() => { setEditingTask(null); setShowCreate((value) => !value); }}>
+          {showCreate ? <X size={15} /> : <Plus size={15} />}
+          {showCreate ? "Cancel" : "Add task"}
+        </Button>
+      </div>
 
-        <div className="project-tasks-toolbar">
-          <p className="type-caption">{tasks.length} {tasks.length === 1 ? "task" : "tasks"}</p>
-          <Button type="button" variant="secondary" onClick={() => { setEditingTask(null); setShowCreate((value) => !value); }}>
-            {showCreate ? <X size={15} /> : <Plus size={15} />}
-            {showCreate ? "Cancel" : "Add task"}
-          </Button>
+      {showCreate && (
+        <form action={createTask} className="project-task-form">
+          <input type="hidden" name="projectId" value={projectId} />
+          <label className="field-label">Task name<Input name="title" minLength={2} maxLength={220} required placeholder="Enter a subtask" /></label>
+          <label className="field-label">Status<ComboboxSelect name="status" options={statusOptions} defaultValue="TODO" /></label>
+          <Button type="submit"><Plus size={15} /> Save task</Button>
+        </form>
+      )}
+
+      {tasks.length === 0 && !showCreate ? (
+        <Empty className="project-task-empty">
+          <EmptyMedia variant="icon"><ListTodo size={18} /></EmptyMedia>
+          <EmptyHeader>
+            <EmptyTitle>No subtasks yet</EmptyTitle>
+            <EmptyDescription>Add tasks to break this project into smaller steps.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <div className="project-task-list">
+          <table className="project-task-table" aria-label={`${projectName} subtasks`}>
+            <thead>
+              <tr>
+                <th scope="col">Subtask</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.map((task) => {
+                return (
+                  <ContextMenu
+                    as="tr"
+                    className="project-task-item"
+                    role="row"
+                    ariaLabel={`Subtask ${task.title}`}
+                    key={task.id}
+                    onEdit={() => { setShowCreate(false); setDeleteTask(null); setEditingTask(task); }}
+                    onDelete={() => { setShowCreate(false); setEditingTask(null); setDeleteTask(task); }}
+                  >
+                    {editingTask?.id === task.id ? (
+                      <td colSpan={2} className="project-task-edit-cell">
+                        <form className="project-task-form project-task-edit-form" onSubmit={(event) => { event.preventDefault(); void saveTask(new FormData(event.currentTarget)); }}>
+                          <input type="hidden" name="id" value={task.id} />
+                          <input type="hidden" name="projectId" value={projectId} />
+                          <label className="field-label">Task name<Input name="title" minLength={2} maxLength={220} required defaultValue={task.title} /></label>
+                          <label className="field-label">Status<ComboboxSelect name="status" options={statusOptions} defaultValue={task.status} /></label>
+                          <div className="project-task-form-actions">
+                            <Button type="button" variant="secondary" onClick={() => setEditingTask(null)}>Cancel</Button>
+                            <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save changes"}</Button>
+                          </div>
+                        </form>
+                      </td>
+                    ) : (
+                      <>
+                        <td className="project-task-title type-body">{task.title}</td>
+                        <td className="project-task-status-cell">
+                          {deleteTask?.id === task.id ? (
+                            <div className="project-task-delete-confirm">
+                              <span className="type-caption">Delete task?</span>
+                              <Button type="button" variant="secondary" disabled={pending} onClick={() => setDeleteTask(null)}>Cancel</Button>
+                              <Button type="button" variant="danger" disabled={pending} onClick={() => { void removeTask(task); }}>{pending ? "Deleting…" : "Delete"}</Button>
+                            </div>
+                          ) : (
+                            <span className="project-task-status-text">{taskStatusLabel[task.status]}</span>
+                          )}
+                        </td>
+                      </>
+                    )}
+                  </ContextMenu>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-
-        {showCreate && (
-          <form action={createTask} className="project-task-form">
-            <input type="hidden" name="projectId" value={projectId} />
-            <label className="field-label">Task name<Input name="title" minLength={2} maxLength={220} required placeholder="Enter a subtask" /></label>
-            <label className="field-label">Status<ComboboxSelect name="status" options={statusOptions} defaultValue="TODO" /></label>
-            <Button type="submit"><Plus size={15} /> Save task</Button>
-          </form>
-        )}
-
-        {tasks.length === 0 && !showCreate ? (
-          <Empty className="project-task-empty">
-            <EmptyMedia variant="icon"><ListTodo size={18} /></EmptyMedia>
-            <EmptyHeader>
-              <EmptyTitle>No subtasks yet</EmptyTitle>
-              <EmptyDescription>Add tasks to break this project into smaller steps.</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <div className="project-task-list" role="list" aria-label={`${projectName} subtasks`}>
-            {tasks.map((task) => {
-              const status = taskStatusInfo[task.status];
-              return (
-                <div className="project-task-item" role="listitem" key={task.id}>
-                  {editingTask?.id === task.id ? (
-                    <form className="project-task-form project-task-edit-form" onSubmit={(event) => { event.preventDefault(); void saveTask(new FormData(event.currentTarget)); }}>
-                      <input type="hidden" name="id" value={task.id} />
-                      <input type="hidden" name="projectId" value={projectId} />
-                      <label className="field-label">Task name<Input name="title" minLength={2} maxLength={220} required defaultValue={task.title} /></label>
-                      <label className="field-label">Status<ComboboxSelect name="status" options={statusOptions} defaultValue={task.status} /></label>
-                      <div className="project-task-form-actions">
-                        <Button type="button" variant="secondary" onClick={() => setEditingTask(null)}>Cancel</Button>
-                        <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save changes"}</Button>
-                      </div>
-                    </form>
-                  ) : (
-                    <>
-                      <div className="project-task-copy">
-                        <span className="project-task-title type-body">{task.title}</span>
-                        <Badge variant={status.variant} className="project-task-status">{status.label}</Badge>
-                      </div>
-                      <div className="project-task-actions">
-                        <Button type="button" variant="ghost" className="icon-button" aria-label={`Edit ${task.title}`} title="Edit task" onClick={() => { setShowCreate(false); setEditingTask(task); }}><Pencil size={14} /></Button>
-                        <Button type="button" variant="ghost" className="icon-button project-task-delete" aria-label={`Delete ${task.title}`} title="Delete task" onClick={() => setDeleteTask(task)}><Trash2 size={14} /></Button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </DialogContent>
-      <ConfirmActionDialog
-        open={deleteTask !== null}
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen) setDeleteTask(null);
-        }}
-        title="Delete this subtask?"
-        description={deleteTask ? `Delete “${deleteTask.title}”? This cannot be undone.` : "This cannot be undone."}
-        actionLabel="Delete task"
-        destructive
-        pending={pending}
-        onConfirm={() => { void deleteTaskActionHandler(); }}
-      />
-    </Dialog>
+      )}
+    </section>
   );
 }

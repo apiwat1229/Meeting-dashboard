@@ -5,9 +5,9 @@ import { Pencil, Trash2 } from "lucide-react";
 import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu";
 
 type ContextMenuProps = {
-  as: "article" | "div" | "li";
+  as: "article" | "div" | "li" | "tr";
   className: string;
-  role?: "group" | "row";
+  role?: "group" | "row" | "listitem";
   ariaLabel: string;
   children: ReactNode;
   onEdit: () => void;

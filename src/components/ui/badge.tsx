@@ -1,6 +1,6 @@
 import type { HTMLAttributes } from "react";
 
-type BadgeVariant = "success" | "warning" | "danger" | "neutral";
+type BadgeVariant = "success" | "warning" | "danger" | "info" | "neutral";
 
 export function Badge({
   className = "",

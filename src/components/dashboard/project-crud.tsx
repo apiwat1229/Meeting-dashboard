@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { ProjectDetailsDialog } from "@/components/dashboard/detail-dialogs";
 
-type ProjectTaskData = { id: number; title: string; status: "TODO" | "IN_PROGRESS" | "DONE" };
+type ProjectTaskData = { id: number; projectId: number; title: string; status: "TODO" | "IN_PROGRESS" | "DONE" };
 
 const projectStatusOptions = [
   { value: "ON_TRACK", label: "In Progress" },
@@ -32,6 +32,8 @@ type ProjectData = {
   progress: number;
   yesterday: string;
   today: string;
+  startDate: string | null;
+  endDate: string | null;
 };
 
 export function AddProjectMenu() {
@@ -64,6 +66,10 @@ export function AddProjectMenu() {
               <ComboboxSelect name="status" options={projectStatusOptions} defaultValue="ON_TRACK" />
             </label>
             <label className="field-label">Progress %<Input name="progress" type="number" min="0" max="100" defaultValue="0" required /></label>
+          </div>
+          <div className="field-pair">
+            <label className="field-label">Start Date<Input name="startDate" type="date" /></label>
+            <label className="field-label">End Date<Input name="endDate" type="date" /></label>
           </div>
           <label className="field-label">Yesterday<Input name="yesterday" maxLength={500} placeholder="Previous update" /></label>
           <label className="field-label">Today<Input name="today" maxLength={500} placeholder="Today's next step" /></label>
@@ -139,7 +145,7 @@ export function ProjectEditor({ project, tasks, children }: { project: ProjectDa
           <div className="detail-dialog-header">
             <div>
               <DialogTitle>Edit project</DialogTitle>
-              <DialogDescription>Update the project status, progress, daily work, and review its subtasks.</DialogDescription>
+              <DialogDescription>Update the project schedule, status, progress, and daily work.</DialogDescription>
             </div>
             <DialogClose className="icon-button project-tasks-close" aria-label="Close project editor"><X size={17} /></DialogClose>
           </div>
@@ -156,6 +162,10 @@ export function ProjectEditor({ project, tasks, children }: { project: ProjectDa
                     </label>
                     <label className="field-label">Progress %<Input name="progress" type="number" min="0" max="100" defaultValue={project.progress} required /></label>
                   </div>
+                  <div className="field-pair">
+                    <label className="field-label">Start Date<Input name="startDate" type="date" defaultValue={project.startDate ?? ""} /></label>
+                    <label className="field-label">End Date<Input name="endDate" type="date" defaultValue={project.endDate ?? ""} /></label>
+                  </div>
                 </section>
                 <section className="project-edit-card project-edit-updates">
                   <h3>Daily updates</h3>
@@ -168,24 +178,6 @@ export function ProjectEditor({ project, tasks, children }: { project: ProjectDa
                   <div className="project-detail-progress-heading"><h3>Current progress</h3><strong>{project.progress}%</strong></div>
                   <Progress value={project.progress} tone={project.status === "DELAY" ? "danger" : project.status === "FINISH" ? "finish" : project.status === "ATTENTION" ? "warning" : "success"} />
                   <p>{project.name}</p>
-                </section>
-                <section className="project-edit-card project-edit-subtasks">
-                  <div className="project-edit-subtasks-heading"><h3>Subtasks</h3><span>{tasks.length}</span></div>
-                  {tasks.length ? (
-                    <ul className="project-edit-task-list">
-                      {tasks.map((task) => (
-                        <li key={task.id}>
-                          <span>{task.title}</span>
-                          <span className={`project-edit-task-status project-edit-task-${task.status.toLowerCase()}`}>
-                            {task.status === "DONE" ? "Done" : task.status === "IN_PROGRESS" ? "In progress" : "To do"}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="project-edit-no-tasks">No subtasks have been added.</p>
-                  )}
-                  <p className="project-edit-task-note">To add or manage tasks, close this editor and select the project name.</p>
                 </section>
               </aside>
             </div>

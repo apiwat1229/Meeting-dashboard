@@ -13,6 +13,12 @@ const projectStatusSchema = z.enum(["ON_TRACK", "DELAY", "FINISH"]);
 const projectTaskStatusSchema = z.enum(["TODO", "IN_PROGRESS", "DONE"]);
 const issueSeveritySchema = z.enum(["HIGH", "MEDIUM"]);
 const activitySectionSchema = z.enum(["YESTERDAY", "TODAY", "OTHER"]);
+const projectDateSchema = z.string().trim().refine((value) => {
+  if (!value) return true;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}, "Enter a valid date.").transform((value) => value || null);
 
 type MutationResult = { ok: boolean; message: string };
 
@@ -75,13 +81,21 @@ export async function createProjectAction(formData: FormData): Promise<MutationR
       status: projectStatusSchema,
       yesterday: z.string().trim().max(500),
       today: z.string().trim().max(500),
+      startDate: projectDateSchema,
+      endDate: projectDateSchema,
       progress: z.coerce.number().int().min(0).max(100),
+    })
+    .refine((values) => !values.startDate || !values.endDate || values.startDate <= values.endDate, {
+      path: ["endDate"],
+      message: "End date must be on or after the start date.",
     })
     .safeParse({
       name: formData.get("name"),
       status: formData.get("status"),
       yesterday: formData.get("yesterday") ?? "",
       today: formData.get("today") ?? "",
+      startDate: formData.get("startDate") ?? "",
+      endDate: formData.get("endDate") ?? "",
       progress: formData.get("progress"),
     });
 
@@ -102,6 +116,12 @@ export async function updateProjectAction(formData: FormData): Promise<MutationR
       progress: z.coerce.number().int().min(0).max(100),
       yesterday: z.string().trim().max(500),
       today: z.string().trim().max(500),
+      startDate: projectDateSchema,
+      endDate: projectDateSchema,
+    })
+    .refine((values) => !values.startDate || !values.endDate || values.startDate <= values.endDate, {
+      path: ["endDate"],
+      message: "End date must be on or after the start date.",
     })
     .safeParse({
       id: formData.get("id"),
@@ -110,12 +130,38 @@ export async function updateProjectAction(formData: FormData): Promise<MutationR
       progress: formData.get("progress"),
       yesterday: formData.get("yesterday") ?? "",
       today: formData.get("today") ?? "",
+      startDate: formData.get("startDate") ?? "",
+      endDate: formData.get("endDate") ?? "",
     });
 
   if (!parsed.success) return invalidFormResult;
   const { id, ...values } = parsed.data;
   return runMutation("Project updated.", "Could not update the project.", () =>
     db.update(projects).set({ ...values, updatedAt: new Date() }).where(eq(projects.id, id)),
+  );
+}
+
+export async function updateProjectScheduleAction(formData: FormData): Promise<MutationResult> {
+  const parsed = z
+    .object({
+      id: z.coerce.number().int().positive(),
+      startDate: projectDateSchema,
+      endDate: projectDateSchema,
+    })
+    .safeParse({
+      id: formData.get("id"),
+      startDate: formData.get("startDate") ?? "",
+      endDate: formData.get("endDate") ?? "",
+    });
+
+  if (!parsed.success) return invalidFormResult;
+  const { id, startDate, endDate } = parsed.data;
+  if (startDate && endDate && startDate > endDate) {
+    return { ok: false, message: "End date must be on or after the start date." };
+  }
+
+  return runMutation("Project dates updated.", "Could not update the project dates.", () =>
+    db.update(projects).set({ startDate, endDate, updatedAt: new Date() }).where(eq(projects.id, id)),
   );
 }
 
@@ -256,23 +302,29 @@ export async function deleteIssueAction(formData: FormData): Promise<MutationRes
   return result;
 }
 
-export async function createActivityAction(formData: FormData): Promise<MutationResult> {
+export async function createActivityAction(formData: FormData): Promise<MutationResult & { activityId?: number }> {
   const parsed = z
     .object({
       section: activitySectionSchema,
       content: z.string().trim().min(2).max(220),
+      completed: z.enum(["true", "false"]).transform((value) => value === "true"),
     })
-    .safeParse({ section: formData.get("section"), content: formData.get("content") });
+    .safeParse({ section: formData.get("section"), content: formData.get("content"), completed: formData.get("completed") ?? "false" });
 
   if (!parsed.success) return invalidFormResult;
   const today = getBangkokDateKey();
-  return runMutation("Activity added.", "Could not add the activity.", () =>
-    db.insert(activities).values({
+  try {
+    const [activity] = await db.insert(activities).values({
       ...parsed.data,
       activityDate: parsed.data.section === "YESTERDAY" ? shiftDateKey(today, -1) : today,
       sortOrder: Math.floor(Date.now() / 1000),
-    }),
-  );
+    }).returning({ id: activities.id });
+    if (!activity) return { ok: false, message: "Could not add the activity." };
+    revalidatePath("/");
+    return { ok: true, message: "Activity added.", activityId: activity.id };
+  } catch {
+    return { ok: false, message: "Could not add the activity." };
+  }
 }
 
 export async function updateActivityAction(formData: FormData): Promise<MutationResult> {

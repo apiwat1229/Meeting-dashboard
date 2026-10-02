@@ -16,6 +16,8 @@ export const projects = pgTable(
     status: projectStatus("status").notNull().default("ON_TRACK"),
     yesterday: text("yesterday").notNull().default(""),
     today: text("today").notNull().default(""),
+    startDate: date("start_date", { mode: "string" }),
+    endDate: date("end_date", { mode: "string" }),
     progress: integer("progress").notNull().default(0),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
