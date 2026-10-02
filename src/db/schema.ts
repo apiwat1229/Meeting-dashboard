@@ -1,4 +1,4 @@
-import { boolean, check, date, integer, jsonb, pgEnum, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, check, date, index, integer, jsonb, pgEnum, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { ThemeConfig } from "@/lib/theme";
 
@@ -7,6 +7,19 @@ export const projectTaskStatus = pgEnum("project_task_status", ["TODO", "IN_PROG
 export const issueSeverity = pgEnum("issue_severity", ["HIGH", "MEDIUM", "LOW"]);
 export const issueState = pgEnum("issue_state", ["OPEN", "CLOSED"]);
 export const activitySection = pgEnum("activity_section", ["YESTERDAY", "TODAY", "OTHER"]);
+export const networkServiceStatuses = pgTable(
+  "network_service_statuses",
+  {
+    id: serial("id").primaryKey(),
+    serviceKey: varchar("service_key", { length: 40 }).notNull().unique(),
+    label: varchar("label", { length: 80 }).notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("UNKNOWN"),
+    reason: varchar("reason", { length: 240 }).notNull().default(""),
+    detail: text("detail").notNull().default(""),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [check("network_service_status_value", sql`${table.status} in ('UNKNOWN', 'NORMAL', 'ABNORMAL')`)],
+);
 
 export const projects = pgTable(
   "projects",
@@ -31,9 +44,35 @@ export const projectTasks = pgTable("project_tasks", {
   projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   title: varchar("title", { length: 220 }).notNull(),
   status: projectTaskStatus("status").notNull().default("TODO"),
+  startDate: date("start_date", { mode: "string" }),
+  endDate: date("end_date", { mode: "string" }),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const projectChangeHistory = pgTable(
+  "project_change_history",
+  {
+    id: serial("id").primaryKey(),
+    projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    field: varchar("field", { length: 40 }).notNull(),
+    oldValue: text("old_value"),
+    newValue: text("new_value"),
+    changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("project_change_history_project_changed_idx").on(table.projectId, table.changedAt.desc(), table.id.desc())],
+);
+
+export const activities = pgTable("activities", {
+  id: serial("id").primaryKey(),
+  section: activitySection("section").notNull(),
+  content: varchar("content", { length: 220 }).notNull(),
+  imageUrl: text("image_url").notNull().default(""),
+  completed: boolean("completed").notNull().default(false),
+  activityDate: date("activity_date", { mode: "string" }).notNull().defaultNow(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const issues = pgTable(
@@ -41,6 +80,8 @@ export const issues = pgTable(
   {
     id: serial("id").primaryKey(),
     projectId: integer("project_id").references(() => projects.id, { onDelete: "set null" }),
+    relatedSection: activitySection("related_section"),
+    relatedActivityId: integer("related_activity_id").references(() => activities.id, { onDelete: "set null" }),
     title: varchar("title", { length: 180 }).notNull(),
     severity: issueSeverity("severity").notNull().default("MEDIUM"),
     state: issueState("state").notNull().default("OPEN"),
@@ -54,16 +95,23 @@ export const issues = pgTable(
   },
 );
 
-export const activities = pgTable("activities", {
-  id: serial("id").primaryKey(),
-  section: activitySection("section").notNull(),
-  content: varchar("content", { length: 220 }).notNull(),
-  imageUrl: text("image_url").notNull().default(""),
-  completed: boolean("completed").notNull().default(false),
-  activityDate: date("activity_date", { mode: "string" }).notNull().defaultNow(),
-  sortOrder: integer("sort_order").notNull().default(0),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const mediaAttachments = pgTable(
+  "media_attachments",
+  {
+    id: serial("id").primaryKey(),
+    issueId: integer("issue_id").references(() => issues.id, { onDelete: "cascade" }),
+    activityId: integer("activity_id").references(() => activities.id, { onDelete: "cascade" }),
+    networkServiceId: integer("network_service_id").references(() => networkServiceStatuses.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check("media_attachments_single_owner", sql`num_nonnulls(${table.issueId}, ${table.activityId}, ${table.networkServiceId}) = 1`),
+    index("media_attachments_issue_id_idx").on(table.issueId, table.id),
+    index("media_attachments_activity_id_idx").on(table.activityId, table.id),
+    index("media_attachments_network_service_id_idx").on(table.networkServiceId, table.id),
+  ],
+);
 
 export const themeSettings = pgTable("theme_settings", {
   id: varchar("id", { length: 40 }).primaryKey(),
@@ -78,9 +126,14 @@ export const dashboardSettings = pgTable("dashboard_settings", {
   purpose: text("purpose").notNull(),
   focusTitle: varchar("focus_title", { length: 140 }).notNull(),
   focusDetail: text("focus_detail").notNull(),
+  focusActivityId: integer("focus_activity_id").references(() => activities.id, { onDelete: "set null" }),
   meetingFlow: text("meeting_flow").notNull(),
   footnote: text("footnote").notNull(),
-  cameraCount: integer("camera_count").notNull().default(48),
+  cameraCount: integer("camera_count").notNull().default(135),
+  cameraFaultyCount: integer("camera_faulty_count").notNull().default(0),
+  cameraWaitingRepairCount: integer("camera_waiting_repair_count").notNull().default(0),
+  cameraRepairingCount: integer("camera_repairing_count").notNull().default(0),
+  cameraInstallingCount: integer("camera_installing_count").notNull().default(0),
   recorderStatus: varchar("recorder_status", { length: 40 }).notNull().default("OK"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

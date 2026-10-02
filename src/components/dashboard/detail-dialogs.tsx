@@ -1,120 +1,164 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { startTransition, useEffect, useState, type ChangeEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { updateProjectScheduleAction } from "@/app/actions";
-import { CalendarDays, ImagePlus, Trash2, X } from "lucide-react";
+import { getProjectChangeHistoryAction, updateProjectDailyAction, updateProjectScheduleAction } from "@/app/actions";
+import { CalendarDays, History, ImagePlus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { MultiComboboxSelect } from "@/components/ui/combobox";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/components/ui/toast";
 import { ProjectTaskManager } from "@/components/dashboard/project-subtasks";
+import { isSupportedMedia, mediaSizeLimit } from "@/components/dashboard/media-file-picker";
 
 type ImageEntityType = "issue" | "activity";
+
+export type MediaAttachmentData = { id: number; url: string };
 
 export function ImageAttachment({
   entityType,
   entityId,
-  initialImageUrl,
+  initialMedia,
   alt,
   editable = false,
 }: {
   entityType: ImageEntityType;
   entityId: number;
-  initialImageUrl: string;
+  initialMedia: MediaAttachmentData[];
   alt: string;
   editable?: boolean;
 }) {
-  const [imageUrl, setImageUrl] = useState(initialImageUrl);
+  const [media, setMedia] = useState(initialMedia);
   const [pending, setPending] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
+  const [previewImage, setPreviewImage] = useState<MediaAttachmentData | null>(null);
   const router = useRouter();
 
-  useEffect(() => setImageUrl(initialImageUrl), [initialImageUrl]);
+  useEffect(() => setMedia(initialMedia), [initialMedia]);
 
-  async function updateImage(formData: FormData, successMessage: string) {
+  async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const files = Array.from(input.files ?? []);
+    input.value = "";
+    if (!files.length) return;
+    const invalidType = files.some((file) => !isSupportedMedia(file));
+    const invalidSize = files.some((file) => isSupportedMedia(file) && (file.size < 1 || file.size > mediaSizeLimit(file)));
+    if (invalidType) toast.error("Use JPG, PNG, WebP, or GIF images, or MP4 or WebM videos.");
+    if (invalidSize) toast.error("Images must be under 5 MB and videos under 100 MB.");
+    const validFiles = files.filter((file) => isSupportedMedia(file) && file.size > 0 && file.size <= mediaSizeLimit(file));
+    if (!validFiles.length) return;
     setPending(true);
+    let uploaded = 0;
+    const errors: string[] = [];
     try {
-      const response = await fetch("/api/images", { method: "POST", body: formData });
-      const result = await response.json() as { ok?: boolean; message?: string; imageUrl?: string };
-      if (!response.ok || !result.ok) {
-        toast.error(result.message ?? "Could not save the image.");
-        return;
+      for (const file of validFiles) {
+        const formData = new FormData();
+        formData.set("entityType", entityType);
+        formData.set("entityId", String(entityId));
+        formData.set("file", file);
+        try {
+          const response = await fetch("/api/images", { method: "POST", body: formData });
+          const result = await response.json() as { ok?: boolean; message?: string; attachment?: MediaAttachmentData };
+          if (!response.ok || !result.ok || !result.attachment) {
+            errors.push(`${file.name}: ${result.message ?? "Could not save the media file."}`);
+          } else {
+            uploaded += 1;
+            setMedia((current) => [...current, result.attachment!]);
+          }
+        } catch {
+          errors.push(`${file.name}: Could not save the media file.`);
+        }
       }
-      setImageUrl(result.imageUrl ?? "");
-      router.refresh();
-      toast.success(successMessage);
-    } catch {
-      toast.error("Could not save the image.");
+      if (uploaded > 0) router.refresh();
+      if (errors.length === 0) toast.success(`${uploaded} media file${uploaded === 1 ? "" : "s"} uploaded.`);
+      else toast.error(`${uploaded} uploaded; ${errors.length} failed. ${errors[0]}`);
     } finally {
       setPending(false);
     }
   }
 
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    input.value = "";
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Choose an image smaller than 5 MB.");
-      return;
-    }
-
-    const formData = new FormData();
-    formData.set("entityType", entityType);
-    formData.set("entityId", String(entityId));
-    formData.set("file", file);
-    void updateImage(formData, imageUrl ? "Image replaced." : "Image uploaded.");
-  }
-
-  function removeImage() {
+  async function removeMedia(attachment: MediaAttachmentData) {
     const formData = new FormData();
     formData.set("entityType", entityType);
     formData.set("entityId", String(entityId));
     formData.set("remove", "true");
-    void updateImage(formData, "Image removed.");
+    formData.set("attachmentId", String(attachment.id));
+    setPending(true);
+    try {
+      const response = await fetch("/api/images", { method: "POST", body: formData });
+      const result = await response.json() as { ok?: boolean; message?: string };
+      if (!response.ok || !result.ok) {
+        toast.error(result.message ?? "Could not remove the media file.");
+        return;
+      }
+      setMedia((current) => current.filter((item) => item.id !== attachment.id));
+      router.refresh();
+      toast.success("Media removed.");
+    } catch {
+      toast.error("Could not remove the media file.");
+    } finally {
+      setPending(false);
+    }
   }
 
+  const singleImage = media.length === 1 && !/\.(mp4|webm)(?:\?.*)?$/i.test(media[0]?.url ?? "");
+
   return (
-    <section className="detail-image-section" aria-label="Image attachment">
+    <section className="detail-image-section" aria-label="Media attachment">
       <div className="detail-image-heading">
-        <h3>Image</h3>
+        <h3>Media</h3>
         {editable && (
           <div className="detail-image-actions">
-            <input
-              ref={fileInput}
-              className="detail-image-input"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              aria-label="Upload an image"
-              onChange={handleFileChange}
-              disabled={pending}
-            />
-            <Button type="button" variant="secondary" onClick={() => fileInput.current?.click()} disabled={pending}>
+            <label className="button button-secondary" aria-disabled={pending} onClick={(event) => { if (pending) event.preventDefault(); }}>
               <ImagePlus size={15} aria-hidden="true" />
-              {pending ? "Saving…" : imageUrl ? "Replace image" : "Upload image"}
-            </Button>
-            {imageUrl && (
-              <Button type="button" variant="ghost" className="detail-image-remove" onClick={removeImage} disabled={pending}>
-                <Trash2 size={15} aria-hidden="true" /> Remove
-              </Button>
-            )}
+              {pending ? "Saving…" : "Add media"}
+              <input className="detail-image-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" multiple aria-label="Upload images or videos" onChange={(event) => { void handleFiles(event); }} disabled={pending} />
+            </label>
           </div>
         )}
       </div>
-      {imageUrl ? (
-        <div className="detail-image-frame">
-          <Image src={imageUrl} alt={alt} fill sizes="(max-width: 700px) 90vw, 640px" unoptimized />
+      {media.length > 0 ? (
+        <div className={`media-gallery${singleImage ? " media-gallery-single" : ""}`}>
+          {media.map((attachment, index) => {
+            const isVideo = /\.(mp4|webm)(?:\?.*)?$/i.test(attachment.url);
+            return (
+              <article className="media-gallery-item" key={attachment.id}>
+                <div className="detail-image-frame">
+                  {isVideo
+                    ? <video className="activity-media-preview" src={attachment.url} controls playsInline preload="metadata" aria-label={`${alt}, video ${index + 1}`} />
+                    : <button type="button" className="media-image-trigger" onClick={() => setPreviewImage(attachment)} aria-label={`Open image ${index + 1} in large view`}>
+                      <Image src={attachment.url} alt={`${alt}, image ${index + 1}`} fill sizes="(max-width: 700px) 90vw, 560px" unoptimized />
+                    </button>}
+                </div>
+                {editable && <div className="media-gallery-actions"><span>{isVideo ? "Video" : "Image"} {index + 1}</span><Button type="button" variant="ghost" className="detail-image-remove" aria-label={`Remove media ${index + 1}`} onClick={() => { void removeMedia(attachment); }} disabled={pending}><Trash2 size={14} aria-hidden="true" /> Remove</Button></div>}
+              </article>
+            );
+          })}
         </div>
       ) : (
-        <p className="detail-image-empty">No image attached.</p>
+        <p className="detail-image-empty">No media attached.</p>
       )}
-      {editable && <p className="detail-image-help">JPG, PNG, WebP, or GIF · maximum 5 MB</p>}
+      {editable && <p className="detail-image-help">Images: JPG, PNG, WebP, GIF (5 MB max each) · Videos: MP4, WebM (100 MB max each)</p>}
+      <Dialog open={previewImage !== null} onOpenChange={(open) => { if (!open) setPreviewImage(null); }}>
+        <DialogContent className="media-preview-dialog" onClick={(event) => event.stopPropagation()}>
+          <div className="detail-dialog-header">
+            <div>
+              <DialogTitle>Image preview</DialogTitle>
+              <DialogDescription>Close the preview to return to the activity details.</DialogDescription>
+            </div>
+            <DialogClose className="icon-button project-tasks-close" aria-label="Close image preview"><X size={17} /></DialogClose>
+          </div>
+          {previewImage && (
+            <div className="media-preview-frame">
+              <Image src={previewImage.url} alt={alt} fill sizes="(max-width: 700px) 94vw, 1200px" unoptimized />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
@@ -123,18 +167,20 @@ type IssueDetails = {
   id: number;
   title: string;
   projectName: string | null;
+  relatedSection: "YESTERDAY" | "TODAY" | "OTHER" | null;
+  relatedActivityTitle: string | null;
   severity: "HIGH" | "MEDIUM" | "LOW";
   state: "OPEN" | "CLOSED";
   detail: string;
   nextStep: string;
   prevention: string;
-  imageUrl: string;
+  media: MediaAttachmentData[];
 };
 
 export function IssueDetailsDialog({ issue, open, onOpenChange }: { issue: IssueDetails; open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="detail-dialog-content" onClick={(event) => event.stopPropagation()}>
+      <DialogContent className="detail-dialog-content issue-details-dialog" onClick={(event) => event.stopPropagation()}>
         <div className="detail-dialog-header">
           <div className="issue-detail-title-group">
             <div className="issue-detail-title-row">
@@ -147,7 +193,17 @@ export function IssueDetailsDialog({ issue, open, onOpenChange }: { issue: Issue
           </div>
           <DialogClose className="icon-button project-tasks-close" aria-label="Close issue details"><X size={17} /></DialogClose>
         </div>
-        {issue.projectName && <div className="detail-badges"><span className="detail-project">{issue.projectName}</span></div>}
+        {(issue.projectName || issue.relatedSection) && (
+          <div className="detail-badges">
+            {issue.projectName && <span className="detail-project">{issue.projectName}</span>}
+            {issue.relatedSection && (
+              <span className="detail-project">
+                {issue.relatedSection === "TODAY" ? "Today Other Activities" : issue.relatedSection === "YESTERDAY" ? "Yesterday Other Activities" : "Other Topics"}
+                {issue.relatedActivityTitle ? ` · ${issue.relatedActivityTitle}` : ""}
+              </span>
+            )}
+          </div>
+        )}
         <section className="detail-copy-section">
           <h3>Detail</h3>
           <p>{issue.detail || "No detail provided."}</p>
@@ -156,7 +212,7 @@ export function IssueDetailsDialog({ issue, open, onOpenChange }: { issue: Issue
           <h3>{issue.state === "CLOSED" ? "Prevention plan" : "Action / Next step"}</h3>
           <p>{issue.state === "CLOSED" ? issue.prevention || "No prevention plan provided." : issue.nextStep || "No next step provided."}</p>
         </section>
-        <ImageAttachment entityType="issue" entityId={issue.id} initialImageUrl={issue.imageUrl} alt={`Image attached to ${issue.title}`} />
+        <ImageAttachment entityType="issue" entityId={issue.id} initialMedia={issue.media} alt={`Media attached to ${issue.title}`} />
       </DialogContent>
     </Dialog>
   );
@@ -168,8 +224,11 @@ type ActivityDetails = {
   section: "YESTERDAY" | "TODAY" | "OTHER";
   completed: boolean;
   activityDate: string;
-  imageUrl: string;
+  media: MediaAttachmentData[];
+  isCarryover?: boolean;
 };
+
+type RelatedIssue = { id: number; title: string; severity: "HIGH" | "MEDIUM" | "LOW"; state: "OPEN" | "CLOSED" };
 
 const sectionLabels: Record<ActivityDetails["section"], string> = {
   TODAY: "Today Other Activities",
@@ -182,27 +241,52 @@ function formatActivityDate(dateKey: string) {
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(date);
 }
 
-export function ActivityDetailsDialog({ activity, open, onOpenChange }: { activity: ActivityDetails; open: boolean; onOpenChange: (open: boolean) => void }) {
+export function ActivityDetailsDialog({ activity, relatedIssues, open, onOpenChange }: { activity: ActivityDetails; relatedIssues: RelatedIssue[]; open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="detail-dialog-content" onClick={(event) => event.stopPropagation()}>
+      <DialogContent className="detail-dialog-content activity-details-dialog" onClick={(event) => event.stopPropagation()}>
         <div className="detail-dialog-header">
           <div>
             <DialogTitle>{activity.content}</DialogTitle>
-            <DialogDescription>Activity details</DialogDescription>
           </div>
           <DialogClose className="icon-button project-tasks-close" aria-label="Close activity details"><X size={17} /></DialogClose>
         </div>
-        <div className="detail-badges activity-detail-badges">
-          <Badge variant={activity.completed ? "info" : "success"}>{activity.completed ? "Done" : "In progress"}</Badge>
-          <span className="detail-project">{sectionLabels[activity.section]}</span>
-          <span className="detail-project">{formatActivityDate(activity.activityDate)}</span>
+        <div className="activity-detail-meta" aria-label="Activity information">
+          <section className="activity-detail-meta-item">
+            <span className="activity-detail-meta-label">Status</span>
+            <div className="activity-detail-meta-value activity-detail-badges">
+              <Badge variant={activity.completed ? "info" : "success"}>{activity.completed ? "Done" : "In progress"}</Badge>
+            </div>
+          </section>
+          <section className="activity-detail-meta-item">
+            <span className="activity-detail-meta-label">Section</span>
+            <strong className="activity-detail-meta-value">{activity.isCarryover ? "Continued from Yesterday" : sectionLabels[activity.section]}</strong>
+          </section>
+          <section className="activity-detail-meta-item">
+            <span className="activity-detail-meta-label">Date</span>
+            <strong className="activity-detail-meta-value">{formatActivityDate(activity.activityDate)}</strong>
+          </section>
         </div>
         <section className="detail-copy-section activity-detail-copy">
           <h3>Description</h3>
-          <p>{activity.content}</p>
+          <p>{activity.content || "No description provided."}</p>
         </section>
-        <ImageAttachment entityType="activity" entityId={activity.id} initialImageUrl={activity.imageUrl} alt={`Image attached to ${activity.content}`} />
+        <section className="detail-copy-section related-issue-section">
+          <h3>Related issues</h3>
+          {relatedIssues.length > 0 ? (
+            <ul className="related-issue-list">
+              {relatedIssues.map((issue) => (
+                <li key={issue.id}>
+                  <span>{issue.title}</span>
+                  <Badge variant={issue.state === "CLOSED" ? "success" : issue.severity === "HIGH" ? "danger" : issue.severity === "LOW" ? "neutral" : "warning"}>
+                    {issue.state === "CLOSED" ? "Done" : issue.severity === "HIGH" ? "High" : issue.severity === "LOW" ? "Low" : "Medium"}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          ) : <p>No related issues.</p>}
+        </section>
+        <ImageAttachment entityType="activity" entityId={activity.id} initialMedia={activity.media} alt={`Media attached to ${activity.content}`} />
       </DialogContent>
     </Dialog>
   );
@@ -217,7 +301,14 @@ type ProjectDetails = {
   today: string;
   startDate: string | null;
   endDate: string | null;
-  tasks: Array<{ id: number; projectId: number; title: string; status: "TODO" | "IN_PROGRESS" | "DONE" }>;
+  tasks: Array<{
+    id: number;
+    projectId: number;
+    title: string;
+    status: "TODO" | "IN_PROGRESS" | "DONE";
+    startDate: string | null;
+    endDate: string | null;
+  }>;
 };
 
 const projectStatusInfo: Record<ProjectDetails["status"], { fill: "success" | "warning" | "danger" | "finish" }> = {
@@ -327,13 +418,14 @@ function ScheduleDatePicker({
 function ProjectSchedulePicker({ projectId, startDate, endDate }: { projectId: number; startDate: string | null; endDate: string | null }) {
   const [dates, setDates] = useState({ startDate: startDate ?? "", endDate: endDate ?? "" });
   const [pending, setPending] = useState(false);
+  const [pendingChange, setPendingChange] = useState<{ field: "startDate" | "endDate"; value: string } | null>(null);
 
   useEffect(() => setDates({ startDate: startDate ?? "", endDate: endDate ?? "" }), [projectId, startDate, endDate]);
 
-  async function saveDate(field: "startDate" | "endDate", value: string) {
-    const previous = dates;
+  async function saveDateChange() {
+    if (!pendingChange) return;
+    const { field, value } = pendingChange;
     const next = { ...dates, [field]: value };
-    setDates(next);
     setPending(true);
 
     const formData = new FormData();
@@ -344,79 +436,304 @@ function ProjectSchedulePicker({ projectId, startDate, endDate }: { projectId: n
     try {
       const result = await updateProjectScheduleAction(formData);
       if (result.ok) {
+        setDates(next);
+        setPendingChange(null);
         toast.success(result.message);
       } else {
-        setDates(previous);
         toast.error(result.message);
       }
     } catch {
-      setDates(previous);
       toast.error("Could not update the project dates.");
     } finally {
       setPending(false);
     }
   }
 
+  function requestDateChange(field: "startDate" | "endDate", value: string) {
+    if (dates[field] === value) return;
+    setPendingChange({ field, value });
+  }
+
+  const pendingFieldLabel = pendingChange?.field === "startDate" ? "Start date" : "End date";
+  const previousDate = pendingChange ? dates[pendingChange.field] : "";
+
   return (
-    <div className="project-date-range" aria-label={projectDateLabel({ startDate: dates.startDate || null, endDate: dates.endDate || null })}>
-      <ScheduleDatePicker
-        label="Start"
-        dateKey={dates.startDate}
-        otherDateKey={dates.endDate}
-        disabled={pending}
-        onSelect={(value) => { void saveDate("startDate", value); }}
-      />
-      <ScheduleDatePicker
-        label="End"
-        dateKey={dates.endDate}
-        otherDateKey={dates.startDate}
-        disabled={pending}
-        onSelect={(value) => { void saveDate("endDate", value); }}
+    <>
+      <div className="project-date-range" aria-label={projectDateLabel({ startDate: dates.startDate || null, endDate: dates.endDate || null })}>
+        <ScheduleDatePicker
+          label="Start"
+          dateKey={dates.startDate}
+          otherDateKey={dates.endDate}
+          disabled={pending}
+          onSelect={(value) => requestDateChange("startDate", value)}
+        />
+        <ScheduleDatePicker
+          label="End"
+          dateKey={dates.endDate}
+          otherDateKey={dates.startDate}
+          disabled={pending}
+          onSelect={(value) => requestDateChange("endDate", value)}
+        />
+      </div>
+      <Dialog open={Boolean(pendingChange)} onOpenChange={(open) => { if (!open && !pending) setPendingChange(null); }}>
+        <DialogContent className="detail-dialog-content project-date-confirm-dialog" onClick={(event) => event.stopPropagation()}>
+          <div className="detail-dialog-header">
+            <div>
+              <DialogTitle>Confirm date change</DialogTitle>
+              <DialogDescription>Review this project schedule update before saving.</DialogDescription>
+            </div>
+            <DialogClose className="icon-button project-tasks-close" aria-label="Close confirmation" disabled={pending}><X size={17} /></DialogClose>
+          </div>
+          {pendingChange && (
+            <div className="project-date-confirm-change">
+              <strong>{pendingFieldLabel}</strong>
+              <div className="project-date-confirm-values">
+                <div><span>Current date</span><p>{previousDate ? formatProjectDate(previousDate) : "Not set"}</p></div>
+                <span className="project-date-confirm-arrow" aria-hidden="true">→</span>
+                <div><span>New date</span><p>{pendingChange.value ? formatProjectDate(pendingChange.value) : "Not set"}</p></div>
+              </div>
+              <p className="project-date-confirm-note">This change will be saved in the project history. You can review it from History.</p>
+            </div>
+          )}
+          <div className="project-date-confirm-actions">
+            <Button type="button" variant="secondary" disabled={pending} onClick={() => setPendingChange(null)}>Cancel</Button>
+            <Button type="button" disabled={pending} onClick={() => { void saveDateChange(); }}>{pending ? "Saving…" : "Confirm date change"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function ProjectDailyUpdateSelector({
+  projectId,
+  field,
+  label,
+  value,
+  tasks,
+  onSaved,
+}: {
+  projectId: number;
+  field: "yesterday" | "today";
+  label: "Yesterday" | "Today";
+  value: string;
+  tasks: ProjectDetails["tasks"];
+  onSaved: (field: "yesterday" | "today", value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const savedTitles = value.split(/\r?\n/).filter(Boolean);
+  const selectedTaskIds = savedTitles.flatMap((title) => {
+    const task = tasks.find((candidate) => candidate.title === title);
+    return task ? [String(task.id)] : [];
+  });
+  const [draftTaskIds, setDraftTaskIds] = useState<string[]>(selectedTaskIds);
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen) setDraftTaskIds(selectedTaskIds);
+    setOpen(nextOpen);
+  }
+
+  async function saveSelection() {
+    if (pending) return;
+    setPending(true);
+    const formData = new FormData();
+    formData.set("id", String(projectId));
+    formData.set("taskIds", JSON.stringify(draftTaskIds));
+    formData.set("field", field);
+
+    try {
+      const result = await updateProjectDailyAction(formData);
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
+      const taskTitlesById = new Map(tasks.map((task) => [String(task.id), task.title]));
+      const selectedTitles = draftTaskIds.flatMap((taskId) => {
+        const title = taskTitlesById.get(taskId);
+        return title ? [title] : [];
+      });
+      onSaved(field, selectedTitles.join("\n"));
+      setOpen(false);
+      toast.success(result.message);
+    } catch {
+      toast.error("Could not save the project update.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="project-daily-update-selector">
+      <span className="project-detail-update-title">{label}</span>
+      <MultiComboboxSelect
+        options={tasks.map((task) => ({ value: String(task.id), label: task.title }))}
+        value={open ? draftTaskIds : selectedTaskIds}
+        onValueChange={setDraftTaskIds}
+        onOpenChange={handleOpenChange}
+        open={open}
+        placeholder={value || "Choose subtasks"}
+        searchPlaceholder={`Search ${label.toLowerCase()} subtasks...`}
+        emptyMessage="No matching subtasks."
+        disabled={pending || tasks.length === 0}
+        className="project-daily-update-combobox"
+        footer={(
+          <div className="shadcn-combobox-footer">
+            <span>{draftTaskIds.length} selected</span>
+            <Button type="button" disabled={pending} onClick={() => startTransition(() => { void saveSelection(); })}>
+              {pending ? "Saving…" : "Save selection"}
+            </Button>
+          </div>
+        )}
       />
     </div>
+  );
+}
+
+type ProjectHistoryEntry = {
+  id: number;
+  field: string;
+  oldValue: string | null;
+  newValue: string | null;
+  changedAt: string;
+};
+
+const historyFieldLabels: Record<string, string> = {
+  name: "Project name",
+  status: "Status",
+  progress: "Progress",
+  yesterday: "Yesterday",
+  today: "Today",
+  startDate: "Start date",
+  endDate: "End date",
+};
+
+function formatHistoryValue(field: string, value: string | null) {
+  if (value === null || value === "") return field === "startDate" || field === "endDate" ? "Not set" : "Empty";
+  if (field === "startDate" || field === "endDate") return formatProjectDate(value);
+  if (field === "progress") return `${value}%`;
+  if (field === "status") {
+    return ({ ON_TRACK: "Ongoing", ATTENTION: "Attention", DELAY: "Delayed", FINISH: "Done" } as Record<string, string>)[value] ?? value;
+  }
+  return value;
+}
+
+function ProjectHistoryDialog({ projectId, open, onOpenChange }: { projectId: number; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [entries, setEntries] = useState<ProjectHistoryEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    setLoading(true);
+    setError("");
+    void getProjectChangeHistoryAction(projectId).then((result) => {
+      if (!active) return;
+      if (result.ok) setEntries(result.entries);
+      else setError(result.message ?? "Could not load project history.");
+    }).catch(() => {
+      if (active) setError("Could not load project history.");
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [open, projectId]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="detail-dialog-content project-history-dialog" onClick={(event) => event.stopPropagation()}>
+        <div className="detail-dialog-header">
+          <div>
+            <DialogTitle>Change history</DialogTitle>
+            <DialogDescription>Project updates and schedule changes</DialogDescription>
+          </div>
+          <DialogClose className="icon-button project-tasks-close" aria-label="Close project history"><X size={17} /></DialogClose>
+        </div>
+        {loading ? (
+          <p className="project-history-state">Loading history…</p>
+        ) : error ? (
+          <p className="project-history-state project-history-error" role="alert">{error}</p>
+        ) : entries.length === 0 ? (
+          <p className="project-history-state">No changes recorded yet.</p>
+        ) : (
+          <ol className="project-history-list">
+            {entries.map((entry) => (
+              <li key={entry.id} className="project-history-entry">
+                <div className="project-history-entry-heading">
+                  <strong>{historyFieldLabels[entry.field] ?? entry.field}</strong>
+                  <time dateTime={entry.changedAt}>
+                    {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(entry.changedAt))}
+                  </time>
+                </div>
+                <p><span>{formatHistoryValue(entry.field, entry.oldValue)}</span><span aria-hidden="true">→</span><strong>{formatHistoryValue(entry.field, entry.newValue)}</strong></p>
+              </li>
+            ))}
+          </ol>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
 export function ProjectDetailsDialog({ project, open, onOpenChange }: { project: ProjectDetails; open: boolean; onOpenChange: (open: boolean) => void }) {
   const status = projectStatusInfo[project.status];
   const completedTasks = project.tasks.filter((task) => task.status === "DONE").length;
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [dailyUpdates, setDailyUpdates] = useState({ yesterday: project.yesterday, today: project.today });
+
+  useEffect(() => setDailyUpdates({ yesterday: project.yesterday, today: project.today }), [project.id, project.yesterday, project.today]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="detail-dialog-content project-details-dialog" onClick={(event) => event.stopPropagation()}>
-        <div className="detail-dialog-header project-detail-header">
-          <div className="project-detail-header-copy">
-            <div className="project-detail-title-row">
-              <DialogTitle>{project.name}</DialogTitle>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="detail-dialog-content project-details-dialog" onClick={(event) => event.stopPropagation()}>
+          <div className="detail-dialog-header project-detail-header">
+            <div className="project-detail-header-copy">
+              <div className="project-detail-title-row">
+                <DialogTitle>{project.name}</DialogTitle>
+              </div>
             </div>
-          </div>
-          <div className="project-detail-meta">
-            <ProjectSchedulePicker projectId={project.id} startDate={project.startDate} endDate={project.endDate} />
-          </div>
-          <DialogClose className="icon-button project-tasks-close" aria-label="Close project details"><X size={17} /></DialogClose>
-        </div>
-        <section className="detail-copy-section project-detail-progress">
-          <div className="project-detail-progress-heading">
-            <div className="project-detail-progress-label">
-              <h3>Progress</h3>
-              <span className="project-task-summary">{project.tasks.length} {project.tasks.length === 1 ? "task" : "tasks"} · {completedTasks} done</span>
+            <div className="project-detail-meta">
+              <ProjectSchedulePicker projectId={project.id} startDate={project.startDate} endDate={project.endDate} />
+              <Button type="button" variant="secondary" className="project-history-trigger" onClick={() => setHistoryOpen(true)}>
+                <History size={16} aria-hidden="true" /> History
+              </Button>
             </div>
-            <strong>{project.progress}%</strong>
+            <DialogClose className="icon-button project-tasks-close" aria-label="Close project details"><X size={17} /></DialogClose>
           </div>
-          <Progress value={project.progress} tone={status.fill} />
-        </section>
-        <div className="project-detail-updates">
-          <section className="detail-copy-section">
-            <h3>Yesterday</h3>
-            <p>{project.yesterday || "No update recorded."}</p>
+          <section className="detail-copy-section project-detail-progress">
+            <div className="project-detail-progress-heading">
+              <div className="project-detail-progress-label">
+                <h3>Progress</h3>
+                <span className="project-task-summary">{project.tasks.length} {project.tasks.length === 1 ? "task" : "tasks"} · {completedTasks} done</span>
+              </div>
+              <strong>{project.progress}%</strong>
+            </div>
+            <Progress value={project.progress} tone={status.fill} />
           </section>
-          <section className="detail-copy-section">
-            <h3>Today</h3>
-            <p>{project.today || "No update recorded."}</p>
-          </section>
-        </div>
-        <ProjectTaskManager projectId={project.id} projectName={project.name} tasks={project.tasks} />
-      </DialogContent>
-    </Dialog>
+          <div className="project-detail-updates">
+            <ProjectDailyUpdateSelector
+              projectId={project.id}
+              field="yesterday"
+              label="Yesterday"
+              value={dailyUpdates.yesterday}
+              tasks={project.tasks}
+              onSaved={(field, value) => setDailyUpdates((current) => ({ ...current, [field]: value }))}
+            />
+            <ProjectDailyUpdateSelector
+              projectId={project.id}
+              field="today"
+              label="Today"
+              value={dailyUpdates.today}
+              tasks={project.tasks}
+              onSaved={(field, value) => setDailyUpdates((current) => ({ ...current, [field]: value }))}
+            />
+          </div>
+          <ProjectTaskManager projectId={project.id} projectName={project.name} yesterday={dailyUpdates.yesterday} today={dailyUpdates.today} tasks={project.tasks} />
+        </DialogContent>
+      </Dialog>
+      <ProjectHistoryDialog projectId={project.id} open={historyOpen} onOpenChange={setHistoryOpen} />
+    </>
   );
 }

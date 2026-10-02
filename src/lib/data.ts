@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, lt, or } from "drizzle-orm";
 import { db } from "@/db";
-import { activities, dashboardSettings, issues, projectTasks, projects, themeSettings } from "@/db/schema";
+import { activities, dashboardSettings, issues, mediaAttachments, networkServiceStatuses, projectTasks, projects, themeSettings } from "@/db/schema";
 import { defaultTheme } from "@/lib/theme";
 import { themeConfigSchema } from "@/lib/theme-schema";
 import { getBangkokDateKey, shiftDateKey } from "@/lib/date-key";
@@ -16,7 +16,7 @@ async function advanceActivities(today: string, yesterday: string) {
       ));
 
     await tx.update(activities)
-      .set({ section: "TODAY", activityDate: today })
+      .set({ section: "YESTERDAY" })
       .where(and(
         inArray(activities.section, ["TODAY", "YESTERDAY"]),
         lt(activities.activityDate, today),
@@ -57,7 +57,7 @@ export async function getDashboardData() {
   const yesterday = shiftDateKey(today, -1);
   await advanceActivities(today, yesterday);
 
-  const [projectRows, projectTaskRows, issueRows, activityRows, settingsRows] = await Promise.all([
+  const [projectRows, projectTaskRows, issueRows, activityRows, settingsRows, mediaRows, networkServiceRows] = await Promise.all([
     db.select().from(projects).orderBy(asc(projects.sortOrder), asc(projects.id)),
     db.select().from(projectTasks).orderBy(asc(projectTasks.sortOrder), asc(projectTasks.id)),
     db
@@ -65,33 +65,73 @@ export async function getDashboardData() {
         id: issues.id,
         projectId: issues.projectId,
         projectName: projects.name,
+        relatedSection: issues.relatedSection,
+        relatedActivityId: issues.relatedActivityId,
+        relatedActivityTitle: activities.content,
+        relatedActivitySection: activities.section,
         title: issues.title,
         severity: issues.severity,
         state: issues.state,
         detail: issues.detail,
         nextStep: issues.nextStep,
         prevention: issues.prevention,
-        imageUrl: issues.imageUrl,
       })
       .from(issues)
       .leftJoin(projects, eq(issues.projectId, projects.id))
+      .leftJoin(activities, eq(issues.relatedActivityId, activities.id))
       .orderBy(asc(issues.sortOrder), asc(issues.id)),
     db.select().from(activities)
       .where(or(
         and(eq(activities.section, "TODAY"), eq(activities.activityDate, today)),
         and(eq(activities.section, "YESTERDAY"), eq(activities.activityDate, yesterday)),
+        and(eq(activities.section, "YESTERDAY"), lt(activities.activityDate, yesterday), eq(activities.completed, false)),
         eq(activities.section, "OTHER"),
       ))
       .orderBy(asc(activities.section), asc(activities.sortOrder), asc(activities.id)),
     db.select().from(dashboardSettings).where(eq(dashboardSettings.id, "default")).limit(1),
+    db.select({ id: mediaAttachments.id, issueId: mediaAttachments.issueId, activityId: mediaAttachments.activityId, networkServiceId: mediaAttachments.networkServiceId, url: mediaAttachments.url })
+      .from(mediaAttachments)
+      .orderBy(asc(mediaAttachments.id)),
+    db.select().from(networkServiceStatuses).orderBy(asc(networkServiceStatuses.id)),
   ]);
+
+  const issueMedia = new Map<number, Array<{ id: number; url: string }>>();
+  const activityMedia = new Map<number, Array<{ id: number; url: string }>>();
+  const networkServiceMedia = new Map<number, Array<{ id: number; url: string }>>();
+  for (const media of mediaRows) {
+    if (media.issueId !== null) issueMedia.set(media.issueId, [...(issueMedia.get(media.issueId) ?? []), { id: media.id, url: media.url }]);
+    if (media.activityId !== null) activityMedia.set(media.activityId, [...(activityMedia.get(media.activityId) ?? []), { id: media.id, url: media.url }]);
+    if (media.networkServiceId !== null) networkServiceMedia.set(media.networkServiceId, [...(networkServiceMedia.get(media.networkServiceId) ?? []), { id: media.id, url: media.url }]);
+  }
+
+  const focusActivityId = settingsRows[0]?.focusActivityId ?? null;
+  const [focusActivity] = focusActivityId === null ? [null] : await db.select({
+    id: activities.id,
+    content: activities.content,
+    section: activities.section,
+    completed: activities.completed,
+  }).from(activities).where(eq(activities.id, focusActivityId)).limit(1);
 
   return {
     reportDateKey: today,
     projects: projectRows,
     projectTasks: projectTaskRows,
-    issues: issueRows,
-    activities: activityRows,
+    networkServices: networkServiceRows.map((service) => ({ ...service, media: networkServiceMedia.get(service.id) ?? [] })),
+    issues: issueRows.map(({ relatedSection, relatedActivitySection, relatedActivityId, ...issue }) => ({
+      ...issue,
+      relatedActivityId,
+      relatedSection: relatedActivityId === null ? relatedSection : relatedActivitySection,
+      media: issueMedia.get(issue.id) ?? [],
+    })),
+    activities: activityRows.flatMap((activity) => {
+      const media = activityMedia.get(activity.id) ?? [];
+      if (activity.section !== "YESTERDAY" || activity.completed) return [{ ...activity, media, isCarryover: false, willCarryOver: false }];
+      return [
+        { ...activity, media, isCarryover: false, willCarryOver: true },
+        { ...activity, section: "TODAY" as const, activityDate: today, media, isCarryover: true, willCarryOver: false },
+      ];
+    }),
+    focusActivity: focusActivity ?? null,
     settings: settingsRows[0] ?? {
       id: "default",
       owner: "IT",
@@ -99,9 +139,14 @@ export async function getDashboardData() {
       purpose: "Align on summary, risks, and details only when needed.",
       focusTitle: "HR System",
       focusDetail: "Fix login error  |  Test by 15:00",
+      focusActivityId: null,
       meetingFlow: "Overall status → Red / yellow items → Today’s focus → Detail sheet only if requested",
       footnote: "Dashboard stays shared during the meeting to reduce screen switching and Excel sheet navigation.",
-      cameraCount: 48,
+      cameraCount: 135,
+      cameraFaultyCount: 0,
+      cameraWaitingRepairCount: 0,
+      cameraRepairingCount: 0,
+      cameraInstallingCount: 0,
       recorderStatus: "OK",
       updatedAt: new Date(),
     },

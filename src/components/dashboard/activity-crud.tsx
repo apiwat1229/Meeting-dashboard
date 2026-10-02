@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
-import { ImagePlus, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { createActivityAction, deleteActivityAction, updateActivityAction } from "@/app/actions";
 import { ConfirmActionDialog } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -15,9 +14,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "@/components/ui/toast";
 import { ActivityDetailsDialog, ImageAttachment } from "@/components/dashboard/detail-dialogs";
+import { MediaFilePicker, uploadMediaFiles } from "@/components/dashboard/media-file-picker";
 
 type ActivitySection = "YESTERDAY" | "TODAY" | "OTHER";
-type ActivityData = { id: number; content: string; section: ActivitySection; completed: boolean; activityDate: string; imageUrl: string };
+type ActivityData = { id: number; content: string; section: ActivitySection; completed: boolean; activityDate: string; media: Array<{ id: number; url: string }>; isCarryover?: boolean; willCarryOver?: boolean };
 
 const sectionOptions = [
   { value: "TODAY", label: "Today Other Activities" },
@@ -35,67 +35,13 @@ const activitySectionLabels: Record<ActivitySection, string> = {
   OTHER: "Other Topics",
 };
 
-function ActivityImagePicker({ file, pending, onFileChange }: { file: File | null; pending: boolean; onFileChange: (file: File | null) => void }) {
-  const fileInput = useRef<HTMLInputElement>(null);
-  const [previewUrl, setPreviewUrl] = useState("");
-
-  useEffect(() => {
-    if (!file) {
-      setPreviewUrl("");
-      return;
-    }
-
-    const nextUrl = URL.createObjectURL(file);
-    setPreviewUrl(nextUrl);
-    return () => URL.revokeObjectURL(nextUrl);
-  }, [file]);
-
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.currentTarget;
-    const selectedFile = input.files?.[0] ?? null;
-    input.value = "";
-    if (!selectedFile) return;
-    if (selectedFile.size > 5 * 1024 * 1024) {
-      toast.error("Choose an image smaller than 5 MB.");
-      return;
-    }
-    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(selectedFile.type)) {
-      toast.error("Use a JPG, PNG, WebP, or GIF image.");
-      return;
-    }
-    onFileChange(selectedFile);
-  }
-
-  return (
-    <section className="detail-image-section" aria-label="Image attachment">
-      <div className="detail-image-heading">
-        <h3>Image</h3>
-        <div className="detail-image-actions">
-          <input ref={fileInput} className="detail-image-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" aria-label="Upload an image" onChange={handleFileChange} disabled={pending} />
-          <Button type="button" variant="secondary" onClick={() => fileInput.current?.click()} disabled={pending}>
-            <ImagePlus size={15} aria-hidden="true" />
-            {file ? "Replace image" : "Upload image"}
-          </Button>
-          {file && <Button type="button" variant="ghost" className="detail-image-remove" onClick={() => onFileChange(null)} disabled={pending}>Remove</Button>}
-        </div>
-      </div>
-      {previewUrl ? (
-        <div className="detail-image-frame"><Image className="activity-image-preview" src={previewUrl} alt="Selected activity attachment preview" fill sizes="(max-width: 700px) 90vw, 640px" unoptimized /></div>
-      ) : (
-        <p className="detail-image-empty">No image attached.</p>
-      )}
-      <p className="detail-image-help">JPG, PNG, WebP, or GIF · maximum 5 MB</p>
-    </section>
-  );
-}
-
 export function AddActivityMenu({ section }: { section: ActivitySection }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState("");
   const [editSection, setEditSection] = useState<ActivitySection>(section);
   const [editCompleted, setEditCompleted] = useState("false");
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
 
   async function handleCreate(formData: FormData) {
@@ -107,33 +53,19 @@ export function AddActivityMenu({ section }: { section: ActivitySection }) {
         return;
       }
 
-      if (imageFile) {
-        const imageFormData = new FormData();
-        imageFormData.set("entityType", "activity");
-        imageFormData.set("entityId", String(result.activityId));
-        imageFormData.set("file", imageFile);
-        let imageSaved = false;
-        let imageError = "Could not save the image.";
-        try {
-          const response = await fetch("/api/images", { method: "POST", body: imageFormData });
-          const imageResult = await response.json() as { ok?: boolean; message?: string };
-          imageSaved = response.ok && Boolean(imageResult.ok);
-          imageError = imageResult.message ?? imageError;
-        } catch {
-          imageSaved = false;
-        }
-        if (imageSaved) {
+      if (mediaFiles.length > 0) {
+        const uploadResult = await uploadMediaFiles("activity", result.activityId, mediaFiles);
+        if (uploadResult.uploaded > 0) {
           router.refresh();
-          toast.success("Activity added with image.");
-        } else {
-          toast.error(`Activity added, but the image could not be attached. ${imageError}`);
         }
+        if (uploadResult.failed.length > 0) toast.error(`Activity added; ${uploadResult.uploaded} media uploaded, ${uploadResult.failed.length} failed. ${uploadResult.failed[0].message}`);
+        else toast.success(`Activity added with ${uploadResult.uploaded} media file${uploadResult.uploaded === 1 ? "" : "s"}.`);
       } else {
         toast.success(result.message);
       }
       setOpen(false);
       setContent("");
-      setImageFile(null);
+      setMediaFiles([]);
     } catch {
       toast.error("Could not add the activity.");
     } finally {
@@ -145,7 +77,7 @@ export function AddActivityMenu({ section }: { section: ActivitySection }) {
     setContent("");
     setEditSection(section);
     setEditCompleted("false");
-    setImageFile(null);
+    setMediaFiles([]);
     setOpen(true);
   }
 
@@ -153,7 +85,7 @@ export function AddActivityMenu({ section }: { section: ActivitySection }) {
     setOpen(nextOpen);
     if (!nextOpen) {
       setContent("");
-      setImageFile(null);
+      setMediaFiles([]);
     }
   }
 
@@ -172,7 +104,7 @@ export function AddActivityMenu({ section }: { section: ActivitySection }) {
           <div className="detail-dialog-header">
             <div>
               <DialogTitle>Add activity</DialogTitle>
-              <DialogDescription>Add an activity, choose where it appears, and attach a supporting image.</DialogDescription>
+              <DialogDescription>Add an activity, choose where it appears, and attach a supporting image or video.</DialogDescription>
             </div>
             <DialogClose className="icon-button project-tasks-close" aria-label="Close activity form"><X size={17} /></DialogClose>
           </div>
@@ -201,7 +133,7 @@ export function AddActivityMenu({ section }: { section: ActivitySection }) {
                   <span>{activitySectionLabels[editSection]}</span>
                   <Badge variant={editCompleted === "true" ? "info" : "success"}>{editCompleted === "true" ? "Done" : "In progress"}</Badge>
                 </section>
-                <ActivityImagePicker file={imageFile} pending={pending} onFileChange={setImageFile} />
+                <MediaFilePicker files={mediaFiles} pending={pending} onFilesChange={setMediaFiles} />
               </aside>
             </div>
             <div className="project-edit-actions">
@@ -215,7 +147,7 @@ export function AddActivityMenu({ section }: { section: ActivitySection }) {
   );
 }
 
-export function ActivityEditor({ activity, children }: { activity: ActivityData; children: ReactNode }) {
+export function ActivityEditor({ activity, relatedIssues, children }: { activity: ActivityData; relatedIssues: Array<{ id: number; title: string; severity: "HIGH" | "MEDIUM" | "LOW"; state: "OPEN" | "CLOSED" }>; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editSection, setEditSection] = useState<ActivitySection>(activity.section);
@@ -261,7 +193,7 @@ export function ActivityEditor({ activity, children }: { activity: ActivityData;
   }
 
   function openEditor() {
-    setEditSection(activity.section);
+    setEditSection(activity.isCarryover ? "YESTERDAY" : activity.section);
     setEditCompleted(String(activity.completed));
     setDetailsOpen(false);
     setConfirmDelete(false);
@@ -283,7 +215,7 @@ export function ActivityEditor({ activity, children }: { activity: ActivityData;
         if (!nextOpen && confirmDelete) return;
         setOpen(nextOpen);
         if (nextOpen) {
-          setEditSection(activity.section);
+          setEditSection(activity.isCarryover ? "YESTERDAY" : activity.section);
           setEditCompleted(String(activity.completed));
         } else {
           setConfirmDelete(false);
@@ -293,7 +225,7 @@ export function ActivityEditor({ activity, children }: { activity: ActivityData;
           <div className="detail-dialog-header">
             <div>
               <DialogTitle>Edit activity</DialogTitle>
-              <DialogDescription>Update the activity, choose where it appears, and attach a supporting image.</DialogDescription>
+              <DialogDescription>Update the activity, choose where it appears, and attach a supporting image or video.</DialogDescription>
             </div>
             <DialogClose className="icon-button project-tasks-close" aria-label="Close activity editor"><X size={17} /></DialogClose>
           </div>
@@ -330,7 +262,7 @@ export function ActivityEditor({ activity, children }: { activity: ActivityData;
                   <p>{activity.content}</p>
                   <span>{activity.section === "TODAY" ? "Today Other Activities" : activity.section === "YESTERDAY" ? "Yesterday Other Activities" : "Other Topics"}</span>
                 </section>
-                <ImageAttachment entityType="activity" entityId={activity.id} initialImageUrl={activity.imageUrl} alt={`Image attached to ${activity.content}`} editable />
+                <ImageAttachment entityType="activity" entityId={activity.id} initialMedia={activity.media} alt={`Media attached to ${activity.content}`} editable />
               </aside>
             </div>
             <div className="project-edit-actions">
@@ -350,7 +282,7 @@ export function ActivityEditor({ activity, children }: { activity: ActivityData;
         pending={pending}
         onConfirm={() => { void deleteActivity(); }}
       />
-      <ActivityDetailsDialog activity={activity} open={detailsOpen} onOpenChange={setDetailsOpen} />
+      <ActivityDetailsDialog activity={activity} relatedIssues={relatedIssues} open={detailsOpen} onOpenChange={setDetailsOpen} />
     </ContextMenu>
   );
 }

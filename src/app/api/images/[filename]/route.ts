@@ -1,27 +1,59 @@
-import { readFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
+import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
-import { imageMimeByExtension, imagePath, isStoredImageName } from "@/lib/image-uploads";
+import { isStoredMediaName, mediaMimeByExtension, mediaPath, type MediaExtension } from "@/lib/image-uploads";
 
 export const runtime = "nodejs";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ filename: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ filename: string }> }) {
   const { filename } = await params;
-  if (!isStoredImageName(filename)) {
-    return NextResponse.json({ message: "Image not found." }, { status: 404 });
+  if (!isStoredMediaName(filename)) {
+    return NextResponse.json({ message: "Media not found." }, { status: 404 });
   }
 
   try {
-    const image = await readFile(imagePath(filename));
-    const extension = filename.slice(filename.lastIndexOf(".") + 1).toLowerCase() as keyof typeof imageMimeByExtension;
-    return new Response(new Uint8Array(image), {
-      headers: {
-        "Content-Type": imageMimeByExtension[extension],
-        "Content-Length": String(image.byteLength),
-        "Cache-Control": "public, max-age=31536000, immutable",
-        "X-Content-Type-Options": "nosniff",
-      },
+    const filePath = mediaPath(filename);
+    const fileStats = await stat(filePath);
+    const extension = filename.slice(filename.lastIndexOf(".") + 1).toLowerCase() as MediaExtension;
+    const range = request.headers.get("range");
+    let start = 0;
+    let end = fileStats.size - 1;
+    let status = 200;
+
+    if (range) {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+      if (!match || fileStats.size === 0) {
+        return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${fileStats.size}` } });
+      }
+      if (match[1] === "") {
+        const suffixLength = Number(match[2]);
+        if (!suffixLength) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${fileStats.size}` } });
+        start = Math.max(fileStats.size - suffixLength, 0);
+      } else {
+        start = Number(match[1]);
+        if (match[2] !== "") end = Number(match[2]);
+      }
+      end = Math.min(end, fileStats.size - 1);
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start > end || start >= fileStats.size) {
+        return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${fileStats.size}` } });
+      }
+      status = 206;
+    }
+
+    const headers = new Headers({
+      "Content-Type": mediaMimeByExtension[extension],
+      "Content-Length": String(end - start + 1),
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "Content-Disposition": `inline; filename="${filename}"`,
+      "X-Content-Type-Options": "nosniff",
     });
+    if (status === 206) headers.set("Content-Range", `bytes ${start}-${end}/${fileStats.size}`);
+
+    const stream = createReadStream(filePath, { start, end });
+    return new Response(Readable.toWeb(stream) as ReadableStream, { status, headers });
   } catch {
-    return NextResponse.json({ message: "Image not found." }, { status: 404 });
+    return NextResponse.json({ message: "Media not found." }, { status: 404 });
   }
 }

@@ -84,7 +84,7 @@ try {
         'HR System', 'Fix login error  |  Test by 15:00',
         'Overall status → Red / yellow items → Today’s focus → Detail sheet only if requested',
         'Dashboard stays shared during the meeting to reduce screen switching and Excel sheet navigation.',
-        48, 'OK')
+        135, 'OK')
      ON CONFLICT (id) DO NOTHING`,
   );
 

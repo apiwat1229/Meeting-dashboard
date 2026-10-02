@@ -1,18 +1,31 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { activities, issues, projectTasks, projects, themeSettings } from "@/db/schema";
+import { activities, dashboardSettings, issues, mediaAttachments, networkServiceStatuses, projectChangeHistory, projectTasks, projects, themeSettings } from "@/db/schema";
 import { themeConfigSchema } from "@/lib/theme-schema";
 import { getBangkokDateKey, shiftDateKey } from "@/lib/date-key";
-import { deleteStoredImage } from "@/lib/image-uploads";
+import { deleteStoredMedia } from "@/lib/image-uploads";
 
 const projectStatusSchema = z.enum(["ON_TRACK", "DELAY", "FINISH"]);
 const projectTaskStatusSchema = z.enum(["TODO", "IN_PROGRESS", "DONE"]);
 const issueSeveritySchema = z.enum(["HIGH", "MEDIUM"]);
 const activitySectionSchema = z.enum(["YESTERDAY", "TODAY", "OTHER"]);
+const networkServiceKeyValues = ["internet", "wifi", "shared-drive", "payroll", "solar-dashboard", "backup-system", "log-tracking", "qr-code-system"] as const;
+const networkServiceKeySchema = z.enum(networkServiceKeyValues);
+const networkServiceUpdateSchema = z.object({
+  key: networkServiceKeySchema,
+  status: z.enum(["UNKNOWN", "NORMAL", "ABNORMAL"]),
+  reason: z.string().trim().max(240),
+  detail: z.string().trim().max(2000),
+}).superRefine((service, context) => {
+  if (service.status === "ABNORMAL") {
+    if (!service.reason) context.addIssue({ code: "custom", path: ["reason"], message: "Enter a reason for the abnormal status." });
+    if (!service.detail) context.addIssue({ code: "custom", path: ["detail"], message: "Enter details for the abnormal status." });
+  }
+});
 const projectDateSchema = z.string().trim().refine((value) => {
   if (!value) return true;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -21,6 +34,60 @@ const projectDateSchema = z.string().trim().refine((value) => {
 }, "Enter a valid date.").transform((value) => value || null);
 
 type MutationResult = { ok: boolean; message: string };
+
+type ProjectTrackedField = "name" | "status" | "progress" | "yesterday" | "today" | "startDate" | "endDate";
+type ProjectChangeValues = Partial<Pick<typeof projects.$inferInsert, ProjectTrackedField>>;
+
+async function updateProjectWithHistory(id: number, values: ProjectChangeValues) {
+  await db.transaction(async (tx) => {
+    const [current] = await tx.select().from(projects).where(eq(projects.id, id)).for("update").limit(1);
+    if (!current) throw new Error("Project not found.");
+
+    const currentValues: Record<ProjectTrackedField, string | number | null> = {
+      name: current.name,
+      status: current.status,
+      progress: current.progress,
+      yesterday: current.yesterday,
+      today: current.today,
+      startDate: current.startDate,
+      endDate: current.endDate,
+    };
+    const nextValues = values as Partial<Record<ProjectTrackedField, string | number | null>>;
+    const newlySetDates = (Object.keys(values) as ProjectTrackedField[]).filter((field) =>
+      (field === "startDate" || field === "endDate") && currentValues[field] === null && nextValues[field] != null,
+    );
+    const previouslyChangedDateFields = new Set<string>();
+    if (newlySetDates.length > 0) {
+      const priorDateChanges = await tx.select({ field: projectChangeHistory.field, oldValue: projectChangeHistory.oldValue })
+        .from(projectChangeHistory)
+        .where(eq(projectChangeHistory.projectId, id));
+      for (const change of priorDateChanges) {
+        if ((change.field === "startDate" || change.field === "endDate") && change.oldValue !== null) {
+          previouslyChangedDateFields.add(change.field);
+        }
+      }
+    }
+    const changes = (Object.keys(values) as ProjectTrackedField[])
+      .filter((field) => {
+        if (currentValues[field] === nextValues[field]) return false;
+        const isScheduleDate = field === "startDate" || field === "endDate";
+        // Setting an unset date for the first time is initialization, not a change.
+        return !(
+          isScheduleDate && currentValues[field] === null &&
+          !previouslyChangedDateFields.has(field)
+        );
+      })
+      .map((field) => ({
+        projectId: id,
+        field,
+        oldValue: currentValues[field] === null ? null : String(currentValues[field]),
+        newValue: nextValues[field] == null ? null : String(nextValues[field]),
+      }));
+
+    await tx.update(projects).set({ ...values, updatedAt: new Date() }).where(eq(projects.id, id));
+    if (changes.length > 0) await tx.insert(projectChangeHistory).values(changes);
+  });
+}
 
 async function runMutation(
   successMessage: string,
@@ -40,6 +107,151 @@ const invalidFormResult: MutationResult = {
   ok: false,
   message: "Please review the required fields and try again.",
 };
+
+export async function saveDashboardFocusAction(formData: FormData): Promise<MutationResult> {
+  const parsed = z.object({
+    focusTitle: z.string().trim().min(1).max(140),
+    focusDetail: z.string().trim().max(500),
+    activityId: z.string().trim().transform((value) => value === "" ? null : Number(value))
+      .pipe(z.number().int().positive().nullable()),
+  }).safeParse({
+    focusTitle: formData.get("focusTitle"),
+    focusDetail: formData.get("focusDetail") ?? "",
+    activityId: formData.get("activityId") ?? "",
+  });
+
+  if (!parsed.success) return invalidFormResult;
+  const { focusTitle, focusDetail, activityId } = parsed.data;
+  if (activityId !== null) {
+    const [activity] = await db.select({ id: activities.id }).from(activities).where(eq(activities.id, activityId)).limit(1);
+    if (!activity) return { ok: false, message: "That activity is no longer available." };
+  }
+
+  return runMutation("Today’s Focus saved.", "Could not save Today’s Focus.", () => db
+    .insert(dashboardSettings)
+    .values({
+      id: "default",
+      purpose: "",
+      focusTitle,
+      focusDetail,
+      focusActivityId: activityId,
+      meetingFlow: "",
+      footnote: "",
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: dashboardSettings.id,
+      set: { focusTitle, focusDetail, focusActivityId: activityId, updatedAt: new Date() },
+    }));
+}
+
+export async function clearDashboardFocusAction(): Promise<MutationResult> {
+  return runMutation("Today’s Focus cleared.", "Could not clear Today’s Focus.", () => db
+    .insert(dashboardSettings)
+    .values({
+      id: "default",
+      purpose: "",
+      focusTitle: "",
+      focusDetail: "",
+      focusActivityId: null,
+      meetingFlow: "",
+      footnote: "",
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: dashboardSettings.id,
+      set: { focusTitle: "", focusDetail: "", focusActivityId: null, updatedAt: new Date() },
+    }));
+}
+
+export async function saveNetworkServerStatusAction(formData: FormData): Promise<MutationResult> {
+  const rawServices = formData.get("services");
+  if (typeof rawServices !== "string") return invalidFormResult;
+
+  let decodedServices: unknown;
+  try {
+    decodedServices = JSON.parse(rawServices);
+  } catch {
+    return invalidFormResult;
+  }
+
+  const parsed = z.array(networkServiceUpdateSchema).length(networkServiceKeyValues.length).safeParse(decodedServices);
+  if (!parsed.success || new Set(parsed.data.map((service) => service.key)).size !== networkServiceKeyValues.length) {
+    return invalidFormResult;
+  }
+  const serviceUpdates = parsed.data;
+
+  return runMutation("Network & Server status saved.", "Could not save Network & Server status.", async () => {
+    await db.transaction(async (tx) => {
+      const rows = await tx.select({ id: networkServiceStatuses.id, serviceKey: networkServiceStatuses.serviceKey })
+        .from(networkServiceStatuses);
+      const idsByKey = new Map(rows.map((row) => [row.serviceKey, row.id]));
+      if (networkServiceKeyValues.some((key) => !idsByKey.has(key))) throw new Error("Network service status configuration is incomplete.");
+
+      for (const service of serviceUpdates) {
+        const id = idsByKey.get(service.key);
+        if (id === undefined) throw new Error("Network service status was not found.");
+        await tx.update(networkServiceStatuses).set({
+          status: service.status,
+          reason: service.status === "ABNORMAL" ? service.reason : "",
+          detail: service.status === "ABNORMAL" ? service.detail : "",
+          updatedAt: new Date(),
+        }).where(eq(networkServiceStatuses.id, id));
+      }
+    });
+  });
+}
+
+export async function saveCctvStatusAction(formData: FormData): Promise<MutationResult> {
+  const parsed = z.object({
+    cameraCount: z.coerce.number().int().min(0).max(100000),
+    cameraFaultyCount: z.coerce.number().int().min(0).max(100000),
+    cameraWaitingRepairCount: z.coerce.number().int().min(0).max(100000),
+    cameraRepairingCount: z.coerce.number().int().min(0).max(100000),
+    cameraInstallingCount: z.coerce.number().int().min(0).max(100000),
+  }).safeParse({
+    cameraCount: formData.get("cameraCount"),
+    cameraFaultyCount: formData.get("cameraFaultyCount"),
+    cameraWaitingRepairCount: formData.get("cameraWaitingRepairCount"),
+    cameraRepairingCount: formData.get("cameraRepairingCount"),
+    cameraInstallingCount: formData.get("cameraInstallingCount"),
+  });
+
+  if (!parsed.success) return invalidFormResult;
+  const { cameraCount, cameraFaultyCount, cameraWaitingRepairCount, cameraRepairingCount, cameraInstallingCount } = parsed.data;
+  if (cameraFaultyCount + cameraWaitingRepairCount + cameraRepairingCount + cameraInstallingCount > cameraCount) {
+    return { ok: false, message: "The number of cameras needing attention cannot exceed the total camera count." };
+  }
+
+  return runMutation("CCTV status saved.", "Could not save CCTV status.", async () => {
+    await db.insert(dashboardSettings).values({
+      id: "default",
+      owner: "IT",
+      reportTime: "08:00",
+      purpose: "Align on summary, risks, and details only when needed.",
+      focusTitle: "HR System",
+      focusDetail: "Fix login error  |  Test by 15:00",
+      focusActivityId: null,
+      meetingFlow: "Overall status → Red / yellow items → Today’s focus → Detail sheet only if requested",
+      footnote: "Dashboard stays shared during the meeting to reduce screen switching and Excel sheet navigation.",
+      cameraCount,
+      cameraFaultyCount,
+      cameraWaitingRepairCount,
+      cameraRepairingCount,
+      cameraInstallingCount,
+      recorderStatus: "OK",
+      updatedAt: new Date(),
+    }).onConflictDoNothing();
+    await db.update(dashboardSettings).set({
+      cameraCount,
+      cameraFaultyCount,
+      cameraWaitingRepairCount,
+      cameraRepairingCount,
+      cameraInstallingCount,
+      updatedAt: new Date(),
+    }).where(eq(dashboardSettings.id, "default"));
+  });
+}
 
 export async function saveThemeAction(
   _previousState: { ok: boolean; message: string },
@@ -137,7 +349,7 @@ export async function updateProjectAction(formData: FormData): Promise<MutationR
   if (!parsed.success) return invalidFormResult;
   const { id, ...values } = parsed.data;
   return runMutation("Project updated.", "Could not update the project.", () =>
-    db.update(projects).set({ ...values, updatedAt: new Date() }).where(eq(projects.id, id)),
+    updateProjectWithHistory(id, values),
   );
 }
 
@@ -161,8 +373,85 @@ export async function updateProjectScheduleAction(formData: FormData): Promise<M
   }
 
   return runMutation("Project dates updated.", "Could not update the project dates.", () =>
-    db.update(projects).set({ startDate, endDate, updatedAt: new Date() }).where(eq(projects.id, id)),
+    updateProjectWithHistory(id, { startDate, endDate }),
   );
+}
+
+export async function updateProjectDailyAction(formData: FormData): Promise<MutationResult> {
+  const rawTaskIds = formData.get("taskIds");
+  if (typeof rawTaskIds !== "string") return invalidFormResult;
+
+  let taskIdsInput: unknown;
+  try {
+    taskIdsInput = JSON.parse(rawTaskIds);
+  } catch {
+    return invalidFormResult;
+  }
+
+  const parsed = z
+    .object({
+      id: z.coerce.number().int().positive(),
+      taskIds: z.array(z.coerce.number().int().positive()).max(100),
+      field: z.enum(["yesterday", "today"]),
+    })
+    .safeParse({
+      id: formData.get("id"),
+      taskIds: taskIdsInput,
+      field: formData.get("field"),
+    });
+
+  if (!parsed.success) return invalidFormResult;
+  const { id, taskIds, field } = parsed.data;
+  if (new Set(taskIds).size !== taskIds.length) return invalidFormResult;
+
+  const taskRows = taskIds.length > 0
+    ? await db.select({ id: projectTasks.id, title: projectTasks.title }).from(projectTasks)
+      .where(and(eq(projectTasks.projectId, id), inArray(projectTasks.id, taskIds)))
+    : [];
+  if (taskRows.length !== taskIds.length) return { ok: false, message: "Choose subtasks from this project." };
+
+  const titlesById = new Map(taskRows.map((task) => [task.id, task.title]));
+  const updateText = taskIds.map((taskId) => titlesById.get(taskId)).filter((title): title is string => title !== undefined).join("\n");
+  const values: ProjectChangeValues = field === "yesterday" ? { yesterday: updateText } : { today: updateText };
+  return runMutation("Project update saved.", "Could not save the project update.", () => updateProjectWithHistory(id, values));
+}
+
+export async function getProjectChangeHistoryAction(projectId: number): Promise<{
+  ok: boolean;
+  message?: string;
+  entries: Array<{ id: number; field: string; oldValue: string | null; newValue: string | null; changedAt: string }>;
+}> {
+  const parsed = z.number().int().positive().safeParse(projectId);
+  if (!parsed.success) return { ok: false, message: "Invalid project.", entries: [] };
+
+  try {
+    const rows = await db.select({
+      id: projectChangeHistory.id,
+      field: projectChangeHistory.field,
+      oldValue: projectChangeHistory.oldValue,
+      newValue: projectChangeHistory.newValue,
+      changedAt: projectChangeHistory.changedAt,
+    })
+      .from(projectChangeHistory)
+      .where(eq(projectChangeHistory.projectId, parsed.data))
+      .orderBy(desc(projectChangeHistory.changedAt), desc(projectChangeHistory.id))
+      .limit(100);
+    const previouslyChangedDateFields = new Set<string>();
+    const visibleRows = [...rows].reverse().filter((row) => {
+      const isScheduleDate = row.field === "startDate" || row.field === "endDate";
+      if (!isScheduleDate) return true;
+      const wasPreviouslyChanged = previouslyChangedDateFields.has(row.field);
+      if (row.oldValue !== null) previouslyChangedDateFields.add(row.field);
+      // Hide legacy first-time assignments from before initialization was excluded.
+      return row.oldValue !== null || wasPreviouslyChanged;
+    }).reverse();
+    return {
+      ok: true,
+      entries: visibleRows.map((row) => ({ ...row, changedAt: row.changedAt.toISOString() })),
+    };
+  } catch {
+    return { ok: false, message: "Could not load project history.", entries: [] };
+  }
 }
 
 export async function deleteProjectAction(formData: FormData): Promise<MutationResult> {
@@ -180,11 +469,19 @@ export async function createProjectTaskAction(formData: FormData): Promise<Mutat
       projectId: z.coerce.number().int().positive(),
       title: z.string().trim().min(2).max(220),
       status: projectTaskStatusSchema,
+      startDate: projectDateSchema,
+      endDate: projectDateSchema,
+    })
+    .refine((values) => !values.startDate || !values.endDate || values.startDate <= values.endDate, {
+      path: ["endDate"],
+      message: "End date must be on or after the start date.",
     })
     .safeParse({
       projectId: formData.get("projectId"),
       title: formData.get("title"),
       status: formData.get("status"),
+      startDate: formData.get("startDate") ?? "",
+      endDate: formData.get("endDate") ?? "",
     });
 
   if (!parsed.success) return invalidFormResult;
@@ -200,12 +497,20 @@ export async function updateProjectTaskAction(formData: FormData): Promise<Mutat
       projectId: z.coerce.number().int().positive(),
       title: z.string().trim().min(2).max(220),
       status: projectTaskStatusSchema,
+      startDate: projectDateSchema,
+      endDate: projectDateSchema,
+    })
+    .refine((values) => !values.startDate || !values.endDate || values.startDate <= values.endDate, {
+      path: ["endDate"],
+      message: "End date must be on or after the start date.",
     })
     .safeParse({
       id: formData.get("id"),
       projectId: formData.get("projectId"),
       title: formData.get("title"),
       status: formData.get("status"),
+      startDate: formData.get("startDate") ?? "",
+      endDate: formData.get("endDate") ?? "",
     });
 
   if (!parsed.success) return invalidFormResult;
@@ -231,11 +536,15 @@ export async function deleteProjectTaskAction(formData: FormData): Promise<Mutat
   );
 }
 
-export async function createIssueAction(formData: FormData): Promise<MutationResult> {
+export async function createIssueAction(formData: FormData): Promise<MutationResult & { issueId?: number }> {
   const projectValue = formData.get("projectId");
+  const relatedSectionValue = formData.get("relatedSection");
+  const relatedActivityValue = formData.get("relatedActivityId");
   const parsed = z
     .object({
       projectId: z.number().int().positive().nullable(),
+      relatedSection: activitySectionSchema.nullable(),
+      relatedActivityId: z.number().int().positive().nullable(),
       title: z.string().trim().min(3).max(180),
       severity: issueSeveritySchema,
       detail: z.string().trim().max(1000),
@@ -244,6 +553,8 @@ export async function createIssueAction(formData: FormData): Promise<MutationRes
     })
     .safeParse({
       projectId: projectValue && projectValue !== "none" ? Number(projectValue) : null,
+      relatedSection: relatedSectionValue && relatedSectionValue !== "none" ? relatedSectionValue : null,
+      relatedActivityId: relatedActivityValue && relatedActivityValue !== "none" ? Number(relatedActivityValue) : null,
       title: formData.get("title"),
       severity: formData.get("severity"),
       detail: formData.get("detail") ?? "",
@@ -252,17 +563,34 @@ export async function createIssueAction(formData: FormData): Promise<MutationRes
     });
 
   if (!parsed.success) return invalidFormResult;
-  return runMutation("Issue added.", "Could not add the issue.", () =>
-    db.insert(issues).values({ ...parsed.data, sortOrder: Math.floor(Date.now() / 1000) }),
-  );
+  if (parsed.data.relatedActivityId !== null) {
+    const [activity] = await db.select({ section: activities.section }).from(activities)
+      .where(eq(activities.id, parsed.data.relatedActivityId)).limit(1);
+    if (!activity || activity.section !== parsed.data.relatedSection) {
+      return { ok: false, message: "Choose an activity from the selected section." };
+    }
+  }
+  try {
+    const [createdIssue] = await db.insert(issues)
+      .values({ ...parsed.data, sortOrder: Math.floor(Date.now() / 1000) })
+      .returning({ id: issues.id });
+    revalidatePath("/");
+    return { ok: true, message: "Issue added.", issueId: createdIssue.id };
+  } catch {
+    return { ok: false, message: "Could not add the issue." };
+  }
 }
 
 export async function updateIssueAction(formData: FormData): Promise<MutationResult> {
   const projectValue = formData.get("projectId");
+  const relatedSectionValue = formData.get("relatedSection");
+  const relatedActivityValue = formData.get("relatedActivityId");
   const parsed = z
     .object({
       id: z.coerce.number().int().positive(),
       projectId: z.number().int().positive().nullable(),
+      relatedSection: activitySectionSchema.nullable(),
+      relatedActivityId: z.number().int().positive().nullable(),
       title: z.string().trim().min(3).max(180),
       severity: issueSeveritySchema,
       state: z.enum(["OPEN", "CLOSED"]),
@@ -273,6 +601,8 @@ export async function updateIssueAction(formData: FormData): Promise<MutationRes
     .safeParse({
       id: formData.get("id"),
       projectId: projectValue && projectValue !== "none" ? Number(projectValue) : null,
+      relatedSection: relatedSectionValue && relatedSectionValue !== "none" ? relatedSectionValue : null,
+      relatedActivityId: relatedActivityValue && relatedActivityValue !== "none" ? Number(relatedActivityValue) : null,
       title: formData.get("title"),
       severity: formData.get("severity"),
       state: formData.get("state"),
@@ -282,6 +612,13 @@ export async function updateIssueAction(formData: FormData): Promise<MutationRes
     });
 
   if (!parsed.success) return invalidFormResult;
+  if (parsed.data.relatedActivityId !== null) {
+    const [activity] = await db.select({ section: activities.section }).from(activities)
+      .where(eq(activities.id, parsed.data.relatedActivityId)).limit(1);
+    if (!activity || activity.section !== parsed.data.relatedSection) {
+      return { ok: false, message: "Choose an activity from the selected section." };
+    }
+  }
   const { id, ...values } = parsed.data;
   return runMutation("Issue updated.", "Could not update the issue.", () =>
     db.update(issues).set({ ...values, updatedAt: new Date() }).where(eq(issues.id, id)),
@@ -292,13 +629,14 @@ export async function deleteIssueAction(formData: FormData): Promise<MutationRes
   const parsed = z.object({ id: z.coerce.number().int().positive() }).safeParse({ id: formData.get("id") });
 
   if (!parsed.success) return invalidFormResult;
-  let imageUrl = "";
+  let mediaUrls: string[] = [];
   const result = await runMutation("Issue deleted.", "Could not delete the issue.", async () => {
     const [issue] = await db.select({ imageUrl: issues.imageUrl }).from(issues).where(eq(issues.id, parsed.data.id)).limit(1);
-    imageUrl = issue?.imageUrl ?? "";
+    const attachments = await db.select({ url: mediaAttachments.url }).from(mediaAttachments).where(eq(mediaAttachments.issueId, parsed.data.id));
+    mediaUrls = [issue?.imageUrl ?? "", ...attachments.map(({ url }) => url)].filter(Boolean);
     await db.delete(issues).where(eq(issues.id, parsed.data.id));
   });
-  if (result.ok) await deleteStoredImage(imageUrl).catch(() => undefined);
+  if (result.ok) await Promise.all(mediaUrls.map((url) => deleteStoredMedia(url).catch(() => undefined)));
   return result;
 }
 
@@ -360,13 +698,14 @@ export async function deleteActivityAction(formData: FormData): Promise<Mutation
   const parsed = z.object({ id: z.coerce.number().int().positive() }).safeParse({ id: formData.get("id") });
 
   if (!parsed.success) return invalidFormResult;
-  let imageUrl = "";
+  let mediaUrls: string[] = [];
   const result = await runMutation("Activity deleted.", "Could not delete the activity.", async () => {
     const [activity] = await db.select({ imageUrl: activities.imageUrl }).from(activities).where(eq(activities.id, parsed.data.id)).limit(1);
-    imageUrl = activity?.imageUrl ?? "";
+    const attachments = await db.select({ url: mediaAttachments.url }).from(mediaAttachments).where(eq(mediaAttachments.activityId, parsed.data.id));
+    mediaUrls = [activity?.imageUrl ?? "", ...attachments.map(({ url }) => url)].filter(Boolean);
     await db.delete(activities).where(eq(activities.id, parsed.data.id));
   });
-  if (result.ok) await deleteStoredImage(imageUrl).catch(() => undefined);
+  if (result.ok) await Promise.all(mediaUrls.map((url) => deleteStoredMedia(url).catch(() => undefined)));
   return result;
 }
 

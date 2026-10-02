@@ -7,11 +7,11 @@ import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu
 type ContextMenuProps = {
   as: "article" | "div" | "li" | "tr";
   className: string;
-  role?: "group" | "row" | "listitem";
+  role?: "button" | "group" | "row" | "listitem";
   ariaLabel: string;
   children: ReactNode;
   onEdit: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
   onActivate?: () => void;
 };
 
@@ -39,10 +39,12 @@ export function ContextMenu({ as, className, role, ariaLabel, children, onEdit, 
               <Pencil size={14} aria-hidden="true" />
               Edit
             </ContextMenuPrimitive.Item>
-            <ContextMenuPrimitive.Item className="context-menu-item context-menu-item-danger" onClick={onDelete}>
-              <Trash2 size={14} aria-hidden="true" />
-              Delete
-            </ContextMenuPrimitive.Item>
+            {onDelete && (
+              <ContextMenuPrimitive.Item className="context-menu-item context-menu-item-danger" onClick={onDelete}>
+                <Trash2 size={14} aria-hidden="true" />
+                Delete
+              </ContextMenuPrimitive.Item>
+            )}
           </ContextMenuPrimitive.Popup>
         </ContextMenuPrimitive.Positioner>
       </ContextMenuPrimitive.Portal>

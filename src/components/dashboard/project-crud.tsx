@@ -15,7 +15,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { ProjectDetailsDialog } from "@/components/dashboard/detail-dialogs";
 
-type ProjectTaskData = { id: number; projectId: number; title: string; status: "TODO" | "IN_PROGRESS" | "DONE" };
+type ProjectTaskData = {
+  id: number;
+  projectId: number;
+  title: string;
+  status: "TODO" | "IN_PROGRESS" | "DONE";
+  startDate: string | null;
+  endDate: string | null;
+};
 
 const projectStatusOptions = [
   { value: "ON_TRACK", label: "In Progress" },

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import {
+  ArrowLeft,
+  ArrowRight,
   CircleAlert,
   FolderKanban,
   ListTodo,
@@ -7,9 +9,9 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { getDashboardData } from "@/lib/data";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { Progress } from "@/components/ui/progress";
 import { ReportDatePicker } from "@/components/dashboard/report-date-picker";
 import { AddIssueMenu } from "@/components/dashboard/add-issue-menu";
 import { IssueEditor } from "@/components/dashboard/issue-editor";
@@ -18,10 +20,32 @@ import { ActivityStatusIndicator } from "@/components/dashboard/activity-status-
 import { AddProjectMenu, ProjectEditor } from "@/components/dashboard/project-crud";
 import { DailyRefresh } from "@/components/dashboard/daily-refresh";
 import { FullScreenToggle } from "@/components/dashboard/full-screen-toggle";
+import { TodayFocus } from "@/components/dashboard/today-focus";
+import { SystemStatusPanel } from "@/components/dashboard/system-status";
+import type { IssueActivityOption } from "@/components/dashboard/issue-activity-link-fields";
 
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
 type ProjectStatus = DashboardData["projects"][number]["status"];
 type IssueRow = DashboardData["issues"][number];
+
+function getIssueActivityOptions(data: DashboardData): IssueActivityOption[] {
+  const options = new Map<number, IssueActivityOption>();
+  for (const activity of data.activities) {
+    if (!options.has(activity.id)) {
+      options.set(activity.id, { id: activity.id, content: activity.content, section: activity.section });
+    }
+  }
+  for (const issue of data.issues) {
+    if (issue.relatedActivityId !== null && issue.relatedActivityTitle && issue.relatedSection && !options.has(issue.relatedActivityId)) {
+      options.set(issue.relatedActivityId, {
+        id: issue.relatedActivityId,
+        content: issue.relatedActivityTitle,
+        section: issue.relatedSection,
+      });
+    }
+  }
+  return [...options.values()];
+}
 
 function formatProjectDate(dateKey: string, includeYear = true) {
   return new Intl.DateTimeFormat("en-GB", {
@@ -46,9 +70,10 @@ function formatProjectDateRange(startDate: string | null, endDate: string | null
   return `${startLabel} - ${formatProjectDate(endDate)}`;
 }
 
-function statusTone(status: ProjectStatus): "success" | "danger" | "finish" {
+function projectProgressTone(status: ProjectStatus): "success" | "warning" | "danger" | "info" {
   if (status === "DELAY") return "danger";
-  if (status === "FINISH") return "finish";
+  if (status === "ATTENTION") return "warning";
+  if (status === "FINISH") return "info";
   return "success";
 }
 
@@ -71,7 +96,7 @@ function SummaryBreakdown({
   label,
   columns = 3,
 }: {
-  items: Array<{ value: string | number; label: string; tone: "neutral" | "success" | "warning" | "danger" }>;
+  items: Array<{ value: string | number; label: string; tone: "neutral" | "success" | "warning" | "danger"; title?: string; detail?: string }>;
   label: string;
   columns?: 2 | 3 | 4;
 }) {
@@ -79,8 +104,10 @@ function SummaryBreakdown({
     <div className={`summary-breakdown summary-breakdown-${columns}`} role="group" aria-label={label}>
       {items.map((item) => (
         <div className={`summary-breakdown-item summary-${item.tone}`} key={item.label}>
+          {item.title && <strong className="summary-breakdown-title">{item.title}</strong>}
           <strong>{item.value}</strong>
           <span>{item.label}</span>
+          {item.detail && <small>{item.detail}</small>}
         </div>
       ))}
     </div>
@@ -96,8 +123,9 @@ function ProjectRow({ project, tasks, index }: { project: DashboardData["project
       <span className="project-work type-body" role="cell">{project.today || "—"}</span>
       <span className="project-schedule-range type-caption" role="cell">{formatProjectDateRange(project.startDate, project.endDate)}</span>
       <div className="project-progress-cell" role="cell">
-        <span className="progress-value type-caption">{project.progress}%</span>
-        <Progress value={project.progress} tone={statusTone(project.status)} />
+        <Badge className="project-progress-badge" variant={projectProgressTone(project.status)} aria-label={`Progress ${project.progress}%`}>
+          {project.progress}%
+        </Badge>
       </div>
     </ProjectEditor>
   );
@@ -155,6 +183,7 @@ function ProjectSection({ data }: { data: DashboardData }) {
 }
 
 function IssueSection({ data }: { data: DashboardData }) {
+  const activityOptions = getIssueActivityOptions(data);
   return (
     <Card className="content-card issue-card">
       <div className="section-heading issue-heading">
@@ -166,7 +195,7 @@ function IssueSection({ data }: { data: DashboardData }) {
             <span className="issue-legend-item"><span className="issue-legend-swatch issue-legend-done" aria-hidden="true" />Done</span>
           </div>
         </div>
-        <AddIssueMenu projects={data.projects.map(({ id, name }) => ({ id, name }))} />
+        <AddIssueMenu projects={data.projects.map(({ id, name }) => ({ id, name }))} activities={activityOptions} />
       </div>
       <div className="issue-list">
         {data.issues.map((issue, index) => (
@@ -177,21 +206,31 @@ function IssueSection({ data }: { data: DashboardData }) {
               id: issue.id,
               title: issue.title,
               projectId: issue.projectId,
+              relatedSection: issue.relatedSection,
+              relatedActivityId: issue.relatedActivityId,
+              relatedActivityTitle: issue.relatedActivityTitle,
               severity: issue.severity,
               state: issue.state,
               detail: issue.detail,
               nextStep: issue.nextStep,
               prevention: issue.prevention,
               projectName: issue.projectName,
-              imageUrl: issue.imageUrl,
+              media: issue.media,
             }}
             projects={data.projects.map(({ id, name }) => ({ id, name }))}
+            activities={activityOptions}
           >
             <span className="issue-index" aria-hidden="true">{index + 1}.</span>
             <div className="issue-copy">
               <div className="issue-title-row">
                 <strong className="type-body">{issue.title}</strong>
                 {issue.projectName && <span className="issue-project type-caption">{issue.projectName}</span>}
+                {issue.relatedSection && (
+                  <span className="issue-project issue-related-section type-caption">
+                    {issue.relatedSection === "TODAY" ? "Today Other Activities" : issue.relatedSection === "YESTERDAY" ? "Yesterday Other Activities" : "Other Topics"}
+                    {issue.relatedActivityTitle ? ` · ${issue.relatedActivityTitle}` : ""}
+                  </span>
+                )}
               </div>
               {issue.detail && <p className="issue-description">{issue.detail}</p>}
               <p className="issue-follow-up">
@@ -229,6 +268,7 @@ function ActivityCard({
   data: DashboardData;
 }) {
   const entries = data.activities.filter((item) => item.section === section);
+  const relatedIssues = data.issues.filter((issue) => issue.relatedSection === section);
 
   return (
     <Card className="activity-card">
@@ -240,13 +280,30 @@ function ActivityCard({
       </div>
       <ul className="activity-list">
         {entries.map((activity, index) => (
-          <ActivityEditor key={activity.id} activity={activity}>
+          <ActivityEditor
+            key={activity.id}
+            activity={activity}
+            relatedIssues={data.issues.filter((issue) => issue.relatedActivityId === activity.id).map((issue) => ({
+              id: issue.id,
+              title: issue.title,
+              severity: issue.severity,
+              state: issue.state,
+            }))}
+          >
             <span className="activity-number" aria-hidden="true">{index + 1}.</span>
-            <ActivityStatusIndicator completed={activity.completed} />
             <span className="activity-content type-body">{activity.content}</span>
+            {(activity.isCarryover || activity.willCarryOver) && (
+              <span className={`activity-carryover-tag ${activity.willCarryOver ? "activity-carryover-pending" : "activity-carryover-today"}`}>
+                {activity.willCarryOver
+                  ? <ArrowRight size={16} aria-hidden="true" />
+                  : <ArrowLeft size={16} aria-hidden="true" />}
+                {activity.willCarryOver ? "Continued today" : "From yesterday"}
+              </span>
+            )}
+            <ActivityStatusIndicator completed={activity.completed} />
           </ActivityEditor>
         ))}
-        {entries.length === 0 && (
+        {entries.length === 0 && relatedIssues.length === 0 && (
           <li className="activity-empty-item">
             <Empty className="dashboard-empty">
               <EmptyMedia variant="icon"><ListTodo size={16} /></EmptyMedia>
@@ -258,6 +315,25 @@ function ActivityCard({
           </li>
         )}
       </ul>
+      {relatedIssues.length > 0 && (
+        <section className="section-linked-issues" aria-label={`Issues related to ${title}`}>
+          <h3><CircleAlert size={14} aria-hidden="true" /> Related issues</h3>
+          <ul className="section-linked-issue-list">
+            {relatedIssues.map((issue) => (
+              <li key={issue.id} className={`section-linked-issue section-linked-${issueTone(issue)}`}>
+                <span className="section-linked-issue-dot" aria-hidden="true" />
+                <div>
+                  <strong>{issue.title}</strong>
+                  {issue.relatedActivityTitle && <span>{issue.relatedActivityTitle}</span>}
+                </div>
+                <span className="section-linked-issue-status">
+                  {issue.state === "CLOSED" ? "Done" : issue.severity === "HIGH" ? "High" : "Medium"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </Card>
   );
 }
@@ -270,8 +346,6 @@ export function Dashboard({ data }: { data: DashboardData }) {
   const openIssues = data.issues.filter((issue) => issue.state === "OPEN");
   const highCount = openIssues.filter((issue) => issue.severity === "HIGH").length;
   const mediumCount = openIssues.filter((issue) => issue.severity === "MEDIUM").length;
-  const camerasWorking = 135;
-  const camerasFaulty = 0;
 
   return (
     <main className="page-shell">
@@ -322,25 +396,30 @@ export function Dashboard({ data }: { data: DashboardData }) {
                 ]}
               />
             </SummaryCard>
-            <SummaryCard
-              label="CCTV Status"
-            >
-              <SummaryBreakdown
-                label={`${camerasWorking} cameras working normally, ${camerasFaulty} faulty cameras`}
-                columns={2}
-                items={[
-                  { value: camerasWorking, label: "Working Normally", tone: "success" },
-                  { value: camerasFaulty > 0 ? camerasFaulty : "-", label: "Faulty", tone: camerasFaulty > 0 ? "danger" : "neutral" },
-                ]}
-              />
-            </SummaryCard>
+            <SystemStatusPanel
+              networkServices={data.networkServices}
+              cctv={{
+                cameraCount: data.settings.cameraCount,
+                cameraFaultyCount: data.settings.cameraFaultyCount,
+                cameraWaitingRepairCount: data.settings.cameraWaitingRepairCount,
+                cameraRepairingCount: data.settings.cameraRepairingCount,
+                cameraInstallingCount: data.settings.cameraInstallingCount,
+              }}
+            />
             <SummaryCard
               label="Today’s Focus"
             >
-              <div className="summary-focus">
-                <strong>{data.settings.focusTitle}</strong>
-                <span>{data.settings.focusDetail}</span>
-              </div>
+              <TodayFocus
+                title={data.settings.focusTitle}
+                detail={data.settings.focusDetail}
+                linkedActivity={data.focusActivity}
+                activities={Array.from(new Map(data.activities.map((activity) => [activity.id, {
+                  id: activity.id,
+                  content: activity.content,
+                  section: activity.section,
+                  completed: activity.completed,
+                }])).values())}
+              />
             </SummaryCard>
           </section>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { deleteIssueAction, updateIssueAction } from "@/app/actions";
 import { ConfirmActionDialog } from "@/components/ui/alert-dialog";
@@ -12,18 +12,22 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageAttachment, IssueDetailsDialog } from "@/components/dashboard/detail-dialogs";
+import { IssueActivityLinkFields, type IssueActivityOption } from "@/components/dashboard/issue-activity-link-fields";
 
 type IssueEditorData = {
   id: number;
   title: string;
   projectId: number | null;
+  relatedSection: "YESTERDAY" | "TODAY" | "OTHER" | null;
+  relatedActivityId: number | null;
+  relatedActivityTitle: string | null;
   severity: "HIGH" | "MEDIUM" | "LOW";
   state: "OPEN" | "CLOSED";
   detail: string;
   nextStep: string;
   prevention: string;
   projectName: string | null;
-  imageUrl: string;
+  media: Array<{ id: number; url: string }>;
 };
 
 type ProjectOption = { id: number; name: string };
@@ -36,14 +40,12 @@ const issueStateOptions = [
   { value: "CLOSED", label: "Done" },
 ];
 
-export function IssueEditor({ issue, projects, className, children }: { issue: IssueEditorData; projects: ProjectOption[]; className: string; children: ReactNode }) {
+export function IssueEditor({ issue, projects, activities, className, children }: { issue: IssueEditorData; projects: ProjectOption[]; activities: IssueActivityOption[]; className: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [editState, setEditState] = useState(issue.state);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [pending, setPending] = useState(false);
-
-  useEffect(() => setEditState(issue.state), [issue.state]);
 
   async function saveIssue(formData: FormData) {
     setPending(true);
@@ -115,9 +117,10 @@ export function IssueEditor({ issue, projects, className, children }: { issue: I
               <section className="project-edit-card issue-edit-information">
                 <h3>Issue information</h3>
                 <label className="field-label">Issue title<Input name="title" minLength={3} maxLength={180} required defaultValue={issue.title} /></label>
-                <label className="field-label">Project
+                <label className="field-label">Related project
                   <ComboboxSelect name="projectId" options={[{ value: "none", label: "No linked project" }, ...projects.map((project) => ({ value: String(project.id), label: project.name }))]} defaultValue={issue.projectId === null ? "none" : String(issue.projectId)} placeholder="No linked project" searchPlaceholder="Search projects..." emptyMessage="No matching projects." />
                 </label>
+                <IssueActivityLinkFields key={`${issue.id}-${open ? "open" : "closed"}`} activities={activities} defaultSection={issue.relatedSection} defaultActivityId={issue.relatedActivityId} />
                 <div className="field-pair">
                   <label className="field-label">Severity
                     <ComboboxSelect name="severity" options={severityOptions} defaultValue={issue.severity === "LOW" ? "MEDIUM" : issue.severity} />
@@ -138,7 +141,7 @@ export function IssueEditor({ issue, projects, className, children }: { issue: I
                     <input type="hidden" name="prevention" value={issue.prevention} />
                   )}
                 </section>
-                <ImageAttachment entityType="issue" entityId={issue.id} initialImageUrl={issue.imageUrl} alt={`Image attached to ${issue.title}`} editable />
+                <ImageAttachment entityType="issue" entityId={issue.id} initialMedia={issue.media} alt={`Media attached to ${issue.title}`} editable />
               </div>
             </div>
             <div className="project-edit-actions">

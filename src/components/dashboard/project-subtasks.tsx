@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { ListTodo, Plus, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { CalendarDays, ChevronDown, ListTodo, Plus, X } from "lucide-react";
 import { createProjectTaskAction, deleteProjectTaskAction, updateProjectTaskAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { ComboboxSelect } from "@/components/ui/combobox";
 import { ContextMenu } from "@/components/ui/context-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/toast";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
@@ -16,6 +18,8 @@ type ProjectTask = {
   projectId: number;
   title: string;
   status: TaskStatus;
+  startDate: string | null;
+  endDate: string | null;
 };
 
 const statusOptions = [
@@ -30,27 +34,142 @@ const taskStatusLabel: Record<TaskStatus, string> = {
   DONE: "Done",
 };
 
+function formatTaskDate(dateKey: string | null) {
+  if (!dateKey) return "—";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${dateKey}T00:00:00Z`));
+}
+
+function taskDateKeyFromDate(date: Date) {
+  const values = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Bangkok",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .formatToParts(date)
+      .map((part) => [part.type, part.value]),
+  );
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function TaskDatePicker({
+  label,
+  name,
+  value,
+  onChange,
+  disabled = false,
+}: {
+  label: "Start date" | "End date";
+  name: "startDate" | "endDate";
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedDate = value ? new Date(`${value}T12:00:00.000Z`) : undefined;
+
+  return (
+    <div className="field-label task-date-field">
+      <span>{label}</span>
+      <input type="hidden" name={name} value={value} />
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          type="button"
+          className="button button-secondary task-date-picker-trigger"
+          aria-label={`${label}, ${value ? formatTaskDate(value) : "not set"}. Choose date`}
+          disabled={disabled}
+        >
+          <CalendarDays size={15} aria-hidden="true" />
+          <span>{value ? formatTaskDate(value) : "Select date"}</span>
+          <ChevronDown size={15} aria-hidden="true" />
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          positionerClassName="project-date-popover-positioner"
+          className="date-picker-popover task-date-popover"
+        >
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={(date) => {
+              if (!date) return;
+              onChange(taskDateKeyFromDate(date));
+              setOpen(false);
+            }}
+            timeZone="Asia/Bangkok"
+            captionLayout="label"
+            className="report-calendar"
+          />
+          {value && (
+            <div className="task-date-popover-footer">
+              <Button type="button" variant="ghost" onClick={() => { onChange(""); setOpen(false); }}>
+                Clear date
+              </Button>
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+function taskSections(task: ProjectTask, yesterday: string, today: string) {
+  const sections = [];
+  if (yesterday.split(/\r?\n/).includes(task.title)) sections.push("Yesterday");
+  if (today.split(/\r?\n/).includes(task.title)) sections.push("Today");
+  return sections.length ? sections.join(" · ") : "—";
+}
+
 export function ProjectTaskManager({
   projectId,
   projectName,
+  yesterday,
+  today,
   tasks,
 }: {
   projectId: number;
   projectName: string;
+  yesterday: string;
+  today: string;
   tasks: ProjectTask[];
 }) {
   const [showCreate, setShowCreate] = useState(false);
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
   const [deleteTask, setDeleteTask] = useState<ProjectTask | null>(null);
   const [pending, setPending] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>("TODO");
+  const [newTaskStartDate, setNewTaskStartDate] = useState("");
+  const [newTaskEndDate, setNewTaskEndDate] = useState("");
+  const newTaskTitleRef = useRef<HTMLInputElement>(null);
 
   async function createTask(formData: FormData) {
-    const result = await createProjectTaskAction(formData);
-    if (result.ok) {
-      toast.success(result.message);
-      setShowCreate(false);
-    } else {
-      toast.error(result.message);
+    if (pending) return;
+    formData.set("projectId", String(projectId));
+
+    setPending(true);
+    try {
+      const result = await createProjectTaskAction(formData);
+      if (result.ok) {
+        toast.success(result.message);
+        setNewTaskTitle("");
+        setNewTaskStatus("TODO");
+        setNewTaskStartDate("");
+        setNewTaskEndDate("");
+        requestAnimationFrame(() => newTaskTitleRef.current?.focus());
+      } else {
+        toast.error(result.message);
+      }
+    } catch {
+      toast.error("Could not add the subtask.");
+    } finally {
+      setPending(false);
     }
   }
 
@@ -107,10 +226,11 @@ export function ProjectTaskManager({
 
       {showCreate && (
         <form action={createTask} className="project-task-form">
-          <input type="hidden" name="projectId" value={projectId} />
-          <label className="field-label">Task name<Input name="title" minLength={2} maxLength={220} required placeholder="Enter a subtask" /></label>
-          <label className="field-label">Status<ComboboxSelect name="status" options={statusOptions} defaultValue="TODO" /></label>
-          <Button type="submit"><Plus size={15} /> Save task</Button>
+          <label className="field-label">Task name<Input ref={newTaskTitleRef} name="title" minLength={2} maxLength={220} required autoFocus placeholder="Enter a subtask" value={newTaskTitle} onChange={(event) => setNewTaskTitle(event.currentTarget.value)} /></label>
+          <label className="field-label">Status<ComboboxSelect name="status" options={statusOptions} value={newTaskStatus} onValueChange={(value) => { if (value === "TODO" || value === "IN_PROGRESS" || value === "DONE") setNewTaskStatus(value); }} /></label>
+          <TaskDatePicker label="Start date" name="startDate" value={newTaskStartDate} onChange={setNewTaskStartDate} />
+          <TaskDatePicker label="End date" name="endDate" value={newTaskEndDate} onChange={setNewTaskEndDate} />
+          <Button type="submit" disabled={pending}><Plus size={15} /> {pending ? "Saving…" : "Save task"}</Button>
         </form>
       )}
 
@@ -128,6 +248,9 @@ export function ProjectTaskManager({
             <thead>
               <tr>
                 <th scope="col">Subtask</th>
+                <th scope="col">Start</th>
+                <th scope="col">End</th>
+                <th scope="col">Section</th>
                 <th scope="col">Status</th>
               </tr>
             </thead>
@@ -144,12 +267,24 @@ export function ProjectTaskManager({
                     onDelete={() => { setShowCreate(false); setEditingTask(null); setDeleteTask(task); }}
                   >
                     {editingTask?.id === task.id ? (
-                      <td colSpan={2} className="project-task-edit-cell">
+                      <td colSpan={5} className="project-task-edit-cell">
                         <form className="project-task-form project-task-edit-form" onSubmit={(event) => { event.preventDefault(); void saveTask(new FormData(event.currentTarget)); }}>
                           <input type="hidden" name="id" value={task.id} />
                           <input type="hidden" name="projectId" value={projectId} />
                           <label className="field-label">Task name<Input name="title" minLength={2} maxLength={220} required defaultValue={task.title} /></label>
                           <label className="field-label">Status<ComboboxSelect name="status" options={statusOptions} defaultValue={task.status} /></label>
+                          <TaskDatePicker
+                            label="Start date"
+                            name="startDate"
+                            value={editingTask.startDate ?? ""}
+                            onChange={(value) => setEditingTask((current) => current?.id === task.id ? { ...current, startDate: value || null } : current)}
+                          />
+                          <TaskDatePicker
+                            label="End date"
+                            name="endDate"
+                            value={editingTask.endDate ?? ""}
+                            onChange={(value) => setEditingTask((current) => current?.id === task.id ? { ...current, endDate: value || null } : current)}
+                          />
                           <div className="project-task-form-actions">
                             <Button type="button" variant="secondary" onClick={() => setEditingTask(null)}>Cancel</Button>
                             <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save changes"}</Button>
@@ -159,6 +294,9 @@ export function ProjectTaskManager({
                     ) : (
                       <>
                         <td className="project-task-title type-body">{task.title}</td>
+                        <td className="project-task-date-cell">{formatTaskDate(task.startDate)}</td>
+                        <td className="project-task-date-cell">{formatTaskDate(task.endDate)}</td>
+                        <td className="project-task-section-cell">{taskSections(task, yesterday, today)}</td>
                         <td className="project-task-status-cell">
                           {deleteTask?.id === task.id ? (
                             <div className="project-task-delete-confirm">
@@ -167,7 +305,9 @@ export function ProjectTaskManager({
                               <Button type="button" variant="danger" disabled={pending} onClick={() => { void removeTask(task); }}>{pending ? "Deleting…" : "Delete"}</Button>
                             </div>
                           ) : (
-                            <span className="project-task-status-text">{taskStatusLabel[task.status]}</span>
+                            <span className={`project-task-status-text project-task-status-${task.status.toLowerCase()}`}>
+                              {taskStatusLabel[task.status]}
+                            </span>
                           )}
                         </td>
                       </>
