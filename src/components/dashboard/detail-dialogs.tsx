@@ -3,12 +3,11 @@
 import { startTransition, useEffect, useState, type ChangeEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { getProjectChangeHistoryAction, updateProjectDailyAction, updateProjectScheduleAction } from "@/app/actions";
+import { getProjectChangeHistoryAction, updateProjectScheduleAction } from "@/app/actions";
 import { CalendarDays, History, ImagePlus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { MultiComboboxSelect } from "@/components/ui/combobox";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
@@ -167,7 +166,7 @@ type IssueDetails = {
   id: number;
   title: string;
   projectName: string | null;
-  relatedSection: "YESTERDAY" | "TODAY" | "OTHER" | null;
+  relatedSection: "YESTERDAY" | "TODAY" | null;
   relatedActivityTitle: string | null;
   severity: "HIGH" | "MEDIUM" | "LOW";
   state: "OPEN" | "CLOSED";
@@ -198,7 +197,7 @@ export function IssueDetailsDialog({ issue, open, onOpenChange }: { issue: Issue
             {issue.projectName && <span className="detail-project">{issue.projectName}</span>}
             {issue.relatedSection && (
               <span className="detail-project">
-                {issue.relatedSection === "TODAY" ? "Today Other Activities" : issue.relatedSection === "YESTERDAY" ? "Yesterday Other Activities" : "Other Topics"}
+                {issue.relatedSection === "YESTERDAY" ? "Yesterday Activities" : "Activities"}
                 {issue.relatedActivityTitle ? ` · ${issue.relatedActivityTitle}` : ""}
               </span>
             )}
@@ -221,20 +220,13 @@ export function IssueDetailsDialog({ issue, open, onOpenChange }: { issue: Issue
 type ActivityDetails = {
   id: number;
   content: string;
-  section: "YESTERDAY" | "TODAY" | "OTHER";
+  severity: "HIGH" | "MEDIUM";
   completed: boolean;
   activityDate: string;
   media: MediaAttachmentData[];
-  isCarryover?: boolean;
 };
 
 type RelatedIssue = { id: number; title: string; severity: "HIGH" | "MEDIUM" | "LOW"; state: "OPEN" | "CLOSED" };
-
-const sectionLabels: Record<ActivityDetails["section"], string> = {
-  TODAY: "Today Other Activities",
-  YESTERDAY: "Yesterday Other Activities",
-  OTHER: "Other Topics",
-};
 
 function formatActivityDate(dateKey: string) {
   const date = new Date(`${dateKey}T00:00:00Z`);
@@ -255,13 +247,17 @@ export function ActivityDetailsDialog({ activity, relatedIssues, open, onOpenCha
           <section className="activity-detail-meta-item">
             <span className="activity-detail-meta-label">Status</span>
             <div className="activity-detail-meta-value activity-detail-badges">
-              <Badge variant={activity.completed ? "info" : "success"}>{activity.completed ? "Done" : "In progress"}</Badge>
+              <Badge className="activity-detail-status-badge" variant="success">{activity.completed ? "Done" : "On schedule"}</Badge>
             </div>
           </section>
-          <section className="activity-detail-meta-item">
-            <span className="activity-detail-meta-label">Section</span>
-            <strong className="activity-detail-meta-value">{activity.isCarryover ? "Continued from Yesterday" : sectionLabels[activity.section]}</strong>
-          </section>
+          {!activity.completed && (
+            <section className="activity-detail-meta-item">
+              <span className="activity-detail-meta-label">Priority</span>
+              <div className="activity-detail-meta-value activity-detail-badges">
+                <Badge variant={activity.severity === "HIGH" ? "danger" : "warning"}>{activity.severity === "HIGH" ? "High" : "Medium"}</Badge>
+              </div>
+            </section>
+          )}
           <section className="activity-detail-meta-item">
             <span className="activity-detail-meta-label">Date</span>
             <strong className="activity-detail-meta-value">{formatActivityDate(activity.activityDate)}</strong>
@@ -271,9 +267,9 @@ export function ActivityDetailsDialog({ activity, relatedIssues, open, onOpenCha
           <h3>Description</h3>
           <p>{activity.content || "No description provided."}</p>
         </section>
-        <section className="detail-copy-section related-issue-section">
-          <h3>Related issues</h3>
-          {relatedIssues.length > 0 ? (
+        {relatedIssues.length > 0 && (
+          <section className="detail-copy-section related-issue-section">
+            <h3>Related issues</h3>
             <ul className="related-issue-list">
               {relatedIssues.map((issue) => (
                 <li key={issue.id}>
@@ -284,8 +280,8 @@ export function ActivityDetailsDialog({ activity, relatedIssues, open, onOpenCha
                 </li>
               ))}
             </ul>
-          ) : <p>No related issues.</p>}
-        </section>
+          </section>
+        )}
         <ImageAttachment entityType="activity" entityId={activity.id} initialMedia={activity.media} alt={`Media attached to ${activity.content}`} />
       </DialogContent>
     </Dialog>
@@ -505,91 +501,6 @@ function ProjectSchedulePicker({ projectId, startDate, endDate }: { projectId: n
   );
 }
 
-function ProjectDailyUpdateSelector({
-  projectId,
-  field,
-  label,
-  value,
-  tasks,
-  onSaved,
-}: {
-  projectId: number;
-  field: "yesterday" | "today";
-  label: "Yesterday" | "Today";
-  value: string;
-  tasks: ProjectDetails["tasks"];
-  onSaved: (field: "yesterday" | "today", value: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [pending, setPending] = useState(false);
-  const savedTitles = value.split(/\r?\n/).filter(Boolean);
-  const selectedTaskIds = savedTitles.flatMap((title) => {
-    const task = tasks.find((candidate) => candidate.title === title);
-    return task ? [String(task.id)] : [];
-  });
-  const [draftTaskIds, setDraftTaskIds] = useState<string[]>(selectedTaskIds);
-
-  function handleOpenChange(nextOpen: boolean) {
-    if (nextOpen) setDraftTaskIds(selectedTaskIds);
-    setOpen(nextOpen);
-  }
-
-  async function saveSelection() {
-    if (pending) return;
-    setPending(true);
-    const formData = new FormData();
-    formData.set("id", String(projectId));
-    formData.set("taskIds", JSON.stringify(draftTaskIds));
-    formData.set("field", field);
-
-    try {
-      const result = await updateProjectDailyAction(formData);
-      if (!result.ok) {
-        toast.error(result.message);
-        return;
-      }
-      const taskTitlesById = new Map(tasks.map((task) => [String(task.id), task.title]));
-      const selectedTitles = draftTaskIds.flatMap((taskId) => {
-        const title = taskTitlesById.get(taskId);
-        return title ? [title] : [];
-      });
-      onSaved(field, selectedTitles.join("\n"));
-      setOpen(false);
-      toast.success(result.message);
-    } catch {
-      toast.error("Could not save the project update.");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <div className="project-daily-update-selector">
-      <span className="project-detail-update-title">{label}</span>
-      <MultiComboboxSelect
-        options={tasks.map((task) => ({ value: String(task.id), label: task.title }))}
-        value={open ? draftTaskIds : selectedTaskIds}
-        onValueChange={setDraftTaskIds}
-        onOpenChange={handleOpenChange}
-        open={open}
-        placeholder={value || "Choose subtasks"}
-        searchPlaceholder={`Search ${label.toLowerCase()} subtasks...`}
-        emptyMessage="No matching subtasks."
-        disabled={pending || tasks.length === 0}
-        className="project-daily-update-combobox"
-        footer={(
-          <div className="shadcn-combobox-footer">
-            <span>{draftTaskIds.length} selected</span>
-            <Button type="button" disabled={pending} onClick={() => startTransition(() => { void saveSelection(); })}>
-              {pending ? "Saving…" : "Save selection"}
-            </Button>
-          </div>
-        )}
-      />
-    </div>
-  );
-}
-
 type ProjectHistoryEntry = {
   id: number;
   field: string;
@@ -680,9 +591,6 @@ export function ProjectDetailsDialog({ project, open, onOpenChange }: { project:
   const status = projectStatusInfo[project.status];
   const completedTasks = project.tasks.filter((task) => task.status === "DONE").length;
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [dailyUpdates, setDailyUpdates] = useState({ yesterday: project.yesterday, today: project.today });
-
-  useEffect(() => setDailyUpdates({ yesterday: project.yesterday, today: project.today }), [project.id, project.yesterday, project.today]);
 
   return (
     <>
@@ -713,24 +621,16 @@ export function ProjectDetailsDialog({ project, open, onOpenChange }: { project:
             <Progress value={project.progress} tone={status.fill} />
           </section>
           <div className="project-detail-updates">
-            <ProjectDailyUpdateSelector
-              projectId={project.id}
-              field="yesterday"
-              label="Yesterday"
-              value={dailyUpdates.yesterday}
-              tasks={project.tasks}
-              onSaved={(field, value) => setDailyUpdates((current) => ({ ...current, [field]: value }))}
-            />
-            <ProjectDailyUpdateSelector
-              projectId={project.id}
-              field="today"
-              label="Today"
-              value={dailyUpdates.today}
-              tasks={project.tasks}
-              onSaved={(field, value) => setDailyUpdates((current) => ({ ...current, [field]: value }))}
-            />
+            <section className="project-daily-update-display" aria-label="Yesterday">
+              <span className="project-detail-update-title">Yesterday</span>
+              <p>{project.yesterday || "No update recorded."}</p>
+            </section>
+            <section className="project-daily-update-display" aria-label="Today">
+              <span className="project-detail-update-title">Today</span>
+              <p>{project.today || "No update recorded."}</p>
+            </section>
           </div>
-          <ProjectTaskManager projectId={project.id} projectName={project.name} yesterday={dailyUpdates.yesterday} today={dailyUpdates.today} tasks={project.tasks} />
+          <ProjectTaskManager projectId={project.id} projectName={project.name} tasks={project.tasks} />
         </DialogContent>
       </Dialog>
       <ProjectHistoryDialog projectId={project.id} open={historyOpen} onOpenChange={setHistoryOpen} />

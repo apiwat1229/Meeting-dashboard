@@ -4,6 +4,7 @@ import { activities, dashboardSettings, issues, mediaAttachments, networkService
 import { defaultTheme } from "@/lib/theme";
 import { themeConfigSchema } from "@/lib/theme-schema";
 import { getBangkokDateKey, shiftDateKey } from "@/lib/date-key";
+import { systemNetworkServiceKeys } from "@/lib/system-status";
 
 async function advanceActivities(today: string, yesterday: string) {
   await db.transaction(async (tx) => {
@@ -24,12 +25,12 @@ async function advanceActivities(today: string, yesterday: string) {
       ));
 
     await tx.update(activities)
-      .set({ activityDate: today })
-      .where(and(
-        eq(activities.section, "OTHER"),
-        lt(activities.activityDate, today),
-        eq(activities.completed, false),
-      ));
+      .set({ section: "TODAY", activityDate: today })
+      .where(eq(activities.section, "OTHER"));
+
+    await tx.update(issues)
+      .set({ relatedSection: "TODAY" })
+      .where(eq(issues.relatedSection, "OTHER"));
   });
 }
 
@@ -89,15 +90,18 @@ export async function getDashboardData() {
       ))
       .orderBy(asc(activities.section), asc(activities.sortOrder), asc(activities.id)),
     db.select().from(dashboardSettings).where(eq(dashboardSettings.id, "default")).limit(1),
-    db.select({ id: mediaAttachments.id, issueId: mediaAttachments.issueId, activityId: mediaAttachments.activityId, networkServiceId: mediaAttachments.networkServiceId, url: mediaAttachments.url })
+    db.select({ id: mediaAttachments.id, issueId: mediaAttachments.issueId, activityId: mediaAttachments.activityId, networkServiceId: mediaAttachments.networkServiceId, dashboardSettingsId: mediaAttachments.dashboardSettingsId, url: mediaAttachments.url })
       .from(mediaAttachments)
       .orderBy(asc(mediaAttachments.id)),
-    db.select().from(networkServiceStatuses).orderBy(asc(networkServiceStatuses.id)),
+    db.select().from(networkServiceStatuses)
+      .where(inArray(networkServiceStatuses.serviceKey, [...systemNetworkServiceKeys]))
+      .orderBy(asc(networkServiceStatuses.id)),
   ]);
 
   const issueMedia = new Map<number, Array<{ id: number; url: string }>>();
   const activityMedia = new Map<number, Array<{ id: number; url: string }>>();
   const networkServiceMedia = new Map<number, Array<{ id: number; url: string }>>();
+  const networkServiceOrder = new Map(systemNetworkServiceKeys.map((key, index) => [key, index]));
   for (const media of mediaRows) {
     if (media.issueId !== null) issueMedia.set(media.issueId, [...(issueMedia.get(media.issueId) ?? []), { id: media.id, url: media.url }]);
     if (media.activityId !== null) activityMedia.set(media.activityId, [...(activityMedia.get(media.activityId) ?? []), { id: media.id, url: media.url }]);
@@ -116,22 +120,34 @@ export async function getDashboardData() {
     reportDateKey: today,
     projects: projectRows,
     projectTasks: projectTaskRows,
-    networkServices: networkServiceRows.map((service) => ({ ...service, media: networkServiceMedia.get(service.id) ?? [] })),
-    issues: issueRows.map(({ relatedSection, relatedActivitySection, relatedActivityId, ...issue }) => ({
-      ...issue,
-      relatedActivityId,
-      relatedSection: relatedActivityId === null ? relatedSection : relatedActivitySection,
-      media: issueMedia.get(issue.id) ?? [],
-    })),
+    networkServices: [...networkServiceRows]
+      .sort((left, right) => (networkServiceOrder.get(left.serviceKey as (typeof systemNetworkServiceKeys)[number]) ?? Number.MAX_SAFE_INTEGER)
+        - (networkServiceOrder.get(right.serviceKey as (typeof systemNetworkServiceKeys)[number]) ?? Number.MAX_SAFE_INTEGER))
+      .map((service) => ({ ...service, media: networkServiceMedia.get(service.id) ?? [] })),
+    cctvMedia: mediaRows.filter((media) => media.dashboardSettingsId === "default").map(({ id, url }) => ({ id, url })),
+    issues: issueRows.map(({ relatedSection, relatedActivitySection, relatedActivityId, ...issue }) => {
+      const resolvedRelatedSection = relatedActivityId === null ? relatedSection : relatedActivitySection;
+      return {
+        ...issue,
+        relatedActivityId,
+        relatedSection: resolvedRelatedSection === "OTHER" ? "TODAY" as const : resolvedRelatedSection,
+        media: issueMedia.get(issue.id) ?? [],
+      };
+    }),
     activities: activityRows.flatMap((activity) => {
-      const media = activityMedia.get(activity.id) ?? [];
-      if (activity.section !== "YESTERDAY" || activity.completed) return [{ ...activity, media, isCarryover: false, willCarryOver: false }];
+      const normalizedActivity = activity.section === "OTHER"
+        ? { ...activity, section: "TODAY" as const, activityDate: today }
+        : activity;
+      const media = activityMedia.get(normalizedActivity.id) ?? [];
+      if (normalizedActivity.section !== "YESTERDAY" || normalizedActivity.completed) return [{ ...normalizedActivity, media, isCarryover: false, willCarryOver: false }];
       return [
-        { ...activity, media, isCarryover: false, willCarryOver: true },
-        { ...activity, section: "TODAY" as const, activityDate: today, media, isCarryover: true, willCarryOver: false },
+        { ...normalizedActivity, media, isCarryover: false, willCarryOver: true },
+        { ...normalizedActivity, section: "TODAY" as const, activityDate: today, media, isCarryover: true, willCarryOver: false },
       ];
     }),
-    focusActivity: focusActivity ?? null,
+    focusActivity: focusActivity
+      ? { ...focusActivity, section: focusActivity.section === "OTHER" ? "TODAY" as const : focusActivity.section }
+      : null,
     settings: settingsRows[0] ?? {
       id: "default",
       owner: "IT",
@@ -140,10 +156,13 @@ export async function getDashboardData() {
       focusTitle: "HR System",
       focusDetail: "Fix login error  |  Test by 15:00",
       focusActivityId: null,
+      focusProjectIds: [],
+      focusTaskIds: [],
       meetingFlow: "Overall status → Red / yellow items → Today’s focus → Detail sheet only if requested",
       footnote: "Dashboard stays shared during the meeting to reduce screen switching and Excel sheet navigation.",
       cameraCount: 135,
       cameraFaultyCount: 0,
+      cameraFaultReason: "",
       cameraWaitingRepairCount: 0,
       cameraRepairingCount: 0,
       cameraInstallingCount: 0,

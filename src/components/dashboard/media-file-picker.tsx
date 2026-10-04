@@ -119,7 +119,7 @@ function MediaFilePreview({ file, pending, onRemove }: { file: File; pending: bo
   );
 }
 
-export async function uploadMediaFiles(entityType: "issue" | "activity" | "networkService", entityId: number, files: File[]) {
+export async function uploadMediaFiles(entityType: "issue" | "activity" | "networkService" | "cctv", entityId: number | string, files: File[]) {
   const failed: Array<{ fileName: string; message: string }> = [];
   let uploaded = 0;
   for (const file of files) {

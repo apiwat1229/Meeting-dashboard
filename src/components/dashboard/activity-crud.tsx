@@ -16,23 +16,26 @@ import { toast } from "@/components/ui/toast";
 import { ActivityDetailsDialog, ImageAttachment } from "@/components/dashboard/detail-dialogs";
 import { MediaFilePicker, uploadMediaFiles } from "@/components/dashboard/media-file-picker";
 
-type ActivitySection = "YESTERDAY" | "TODAY" | "OTHER";
-type ActivityData = { id: number; content: string; section: ActivitySection; completed: boolean; activityDate: string; media: Array<{ id: number; url: string }>; isCarryover?: boolean; willCarryOver?: boolean };
+type ActivitySection = "YESTERDAY" | "TODAY";
+type ActivitySeverity = "HIGH" | "MEDIUM";
+type ActivityData = { id: number; content: string; section: ActivitySection; severity: ActivitySeverity; completed: boolean; activityDate: string; media: Array<{ id: number; url: string }>; isCarryover?: boolean; willCarryOver?: boolean };
 
 const sectionOptions = [
-  { value: "TODAY", label: "Today Other Activities" },
-  { value: "YESTERDAY", label: "Yesterday Other Activities" },
-  { value: "OTHER", label: "Other Topics" },
+  { value: "TODAY", label: "Activities" },
+  { value: "YESTERDAY", label: "Yesterday Activities" },
 ] satisfies Array<{ value: ActivitySection; label: string }>;
 const completionOptions = [
   { value: "false", label: "In progress" },
   { value: "true", label: "Done" },
 ];
+const severityOptions = [
+  { value: "HIGH", label: "High" },
+  { value: "MEDIUM", label: "Medium" },
+];
 
 const activitySectionLabels: Record<ActivitySection, string> = {
-  TODAY: "Today Other Activities",
-  YESTERDAY: "Yesterday Other Activities",
-  OTHER: "Other Topics",
+  TODAY: "Activities",
+  YESTERDAY: "Yesterday Activities",
 };
 
 export function AddActivityMenu({ section }: { section: ActivitySection }) {
@@ -40,6 +43,7 @@ export function AddActivityMenu({ section }: { section: ActivitySection }) {
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState("");
   const [editSection, setEditSection] = useState<ActivitySection>(section);
+  const [editSeverity, setEditSeverity] = useState<ActivitySeverity>("MEDIUM");
   const [editCompleted, setEditCompleted] = useState("false");
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
@@ -76,6 +80,7 @@ export function AddActivityMenu({ section }: { section: ActivitySection }) {
   function openAddForm() {
     setContent("");
     setEditSection(section);
+    setEditSeverity("MEDIUM");
     setEditCompleted("false");
     setMediaFiles([]);
     setOpen(true);
@@ -110,6 +115,7 @@ export function AddActivityMenu({ section }: { section: ActivitySection }) {
           </div>
           <form onSubmit={(event) => { event.preventDefault(); void handleCreate(new FormData(event.currentTarget)); }} className="activity-edit-form">
             <input type="hidden" name="section" value={editSection} />
+            <input type="hidden" name="severity" value={editSeverity} />
             <input type="hidden" name="completed" value={editCompleted} />
             <div className="activity-edit-layout">
               <section className="project-edit-card activity-edit-information">
@@ -117,7 +123,12 @@ export function AddActivityMenu({ section }: { section: ActivitySection }) {
                 <label className="field-label">Description<Textarea name="content" minLength={2} maxLength={220} required rows={5} value={content} onChange={(event) => setContent(event.currentTarget.value)} placeholder="Describe the activity" /></label>
                 <label className="field-label">Section
                   <ComboboxSelect value={editSection} options={sectionOptions} onValueChange={(value) => {
-                    if (value === "TODAY" || value === "YESTERDAY" || value === "OTHER") setEditSection(value);
+                    if (value === "TODAY" || value === "YESTERDAY") setEditSection(value);
+                  }} />
+                </label>
+                <label className="field-label">Priority
+                  <ComboboxSelect value={editSeverity} options={severityOptions} onValueChange={(value) => {
+                    if (value === "HIGH" || value === "MEDIUM") setEditSeverity(value);
                   }} />
                 </label>
                 <label className="field-label">Status
@@ -131,7 +142,9 @@ export function AddActivityMenu({ section }: { section: ActivitySection }) {
                   <h3>New activity</h3>
                   <p>{content.trim() || "Your activity description will appear here."}</p>
                   <span>{activitySectionLabels[editSection]}</span>
-                  <Badge variant={editCompleted === "true" ? "info" : "success"}>{editCompleted === "true" ? "Done" : "In progress"}</Badge>
+                  <Badge variant={editCompleted === "true" ? "success" : editSeverity === "HIGH" ? "danger" : "warning"}>
+                    {editCompleted === "true" ? "Done" : editSeverity === "HIGH" ? "High" : "Medium"}
+                  </Badge>
                 </section>
                 <MediaFilePicker files={mediaFiles} pending={pending} onFilesChange={setMediaFiles} />
               </aside>
@@ -151,6 +164,7 @@ export function ActivityEditor({ activity, relatedIssues, children }: { activity
   const [open, setOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editSection, setEditSection] = useState<ActivitySection>(activity.section);
+  const [editSeverity, setEditSeverity] = useState<ActivitySeverity>(activity.severity);
   const [editCompleted, setEditCompleted] = useState(String(activity.completed));
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, setPending] = useState(false);
@@ -194,6 +208,7 @@ export function ActivityEditor({ activity, relatedIssues, children }: { activity
 
   function openEditor() {
     setEditSection(activity.isCarryover ? "YESTERDAY" : activity.section);
+    setEditSeverity(activity.severity);
     setEditCompleted(String(activity.completed));
     setDetailsOpen(false);
     setConfirmDelete(false);
@@ -214,9 +229,10 @@ export function ActivityEditor({ activity, relatedIssues, children }: { activity
       <Dialog open={open} onOpenChange={(nextOpen) => {
         if (!nextOpen && confirmDelete) return;
         setOpen(nextOpen);
-        if (nextOpen) {
-          setEditSection(activity.isCarryover ? "YESTERDAY" : activity.section);
-          setEditCompleted(String(activity.completed));
+          if (nextOpen) {
+            setEditSection(activity.isCarryover ? "YESTERDAY" : activity.section);
+            setEditSeverity(activity.severity);
+            setEditCompleted(String(activity.completed));
         } else {
           setConfirmDelete(false);
         }
@@ -232,6 +248,7 @@ export function ActivityEditor({ activity, relatedIssues, children }: { activity
           <form onSubmit={(event) => { event.preventDefault(); void saveActivity(new FormData(event.currentTarget)); }} className="activity-edit-form">
             <input type="hidden" name="id" value={activity.id} />
             <input type="hidden" name="section" value={editSection} />
+            <input type="hidden" name="severity" value={editSeverity} />
             <input type="hidden" name="completed" value={editCompleted} />
             <div className="activity-edit-layout">
               <section className="project-edit-card activity-edit-information">
@@ -242,7 +259,16 @@ export function ActivityEditor({ activity, relatedIssues, children }: { activity
                     value={editSection}
                     options={sectionOptions}
                     onValueChange={(value) => {
-                      if (value === "TODAY" || value === "YESTERDAY" || value === "OTHER") setEditSection(value);
+                      if (value === "TODAY" || value === "YESTERDAY") setEditSection(value);
+                    }}
+                  />
+                </label>
+                <label className="field-label">Priority
+                  <ComboboxSelect
+                    value={editSeverity}
+                    options={severityOptions}
+                    onValueChange={(value) => {
+                      if (value === "HIGH" || value === "MEDIUM") setEditSeverity(value);
                     }}
                   />
                 </label>
@@ -260,7 +286,10 @@ export function ActivityEditor({ activity, relatedIssues, children }: { activity
                 <section className="project-edit-card activity-edit-summary">
                   <h3>Current activity</h3>
                   <p>{activity.content}</p>
-                  <span>{activity.section === "TODAY" ? "Today Other Activities" : activity.section === "YESTERDAY" ? "Yesterday Other Activities" : "Other Topics"}</span>
+                  <span>{activitySectionLabels[activity.section]}</span>
+                  <Badge variant={activity.completed ? "success" : activity.severity === "HIGH" ? "danger" : "warning"}>
+                    {activity.completed ? "Done" : activity.severity === "HIGH" ? "High" : "Medium"}
+                  </Badge>
                 </section>
                 <ImageAttachment entityType="activity" entityId={activity.id} initialMedia={activity.media} alt={`Media attached to ${activity.content}`} editable />
               </aside>

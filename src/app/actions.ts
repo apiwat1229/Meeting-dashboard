@@ -8,12 +8,14 @@ import { activities, dashboardSettings, issues, mediaAttachments, networkService
 import { themeConfigSchema } from "@/lib/theme-schema";
 import { getBangkokDateKey, shiftDateKey } from "@/lib/date-key";
 import { deleteStoredMedia } from "@/lib/image-uploads";
+import { systemNetworkServiceKeys } from "@/lib/system-status";
 
 const projectStatusSchema = z.enum(["ON_TRACK", "DELAY", "FINISH"]);
 const projectTaskStatusSchema = z.enum(["TODO", "IN_PROGRESS", "DONE"]);
 const issueSeveritySchema = z.enum(["HIGH", "MEDIUM"]);
-const activitySectionSchema = z.enum(["YESTERDAY", "TODAY", "OTHER"]);
-const networkServiceKeyValues = ["internet", "wifi", "shared-drive", "payroll", "solar-dashboard", "backup-system", "log-tracking", "qr-code-system"] as const;
+const activitySeveritySchema = z.enum(["HIGH", "MEDIUM"]);
+const activitySectionSchema = z.enum(["YESTERDAY", "TODAY"]);
+const networkServiceKeyValues = systemNetworkServiceKeys;
 const networkServiceKeySchema = z.enum(networkServiceKeyValues);
 const networkServiceUpdateSchema = z.object({
   key: networkServiceKeySchema,
@@ -164,6 +166,65 @@ export async function clearDashboardFocusAction(): Promise<MutationResult> {
     }));
 }
 
+export async function saveDashboardFocusProjectsAction(formData: FormData): Promise<MutationResult> {
+  const rawProjectIds = formData.get("projectIds");
+  const rawTaskIds = formData.get("taskIds");
+  if (typeof rawProjectIds !== "string" || typeof rawTaskIds !== "string") return invalidFormResult;
+
+  let decodedProjectIds: unknown;
+  let decodedTaskIds: unknown;
+  try {
+    decodedProjectIds = JSON.parse(rawProjectIds);
+    decodedTaskIds = JSON.parse(rawTaskIds);
+  } catch {
+    return invalidFormResult;
+  }
+
+  const parsedProjectIds = z.array(z.number().int().positive()).max(100).safeParse(decodedProjectIds);
+  const parsedTaskIds = z.array(z.number().int().positive()).max(500).safeParse(decodedTaskIds);
+  if (!parsedProjectIds.success || !parsedTaskIds.success) return invalidFormResult;
+  if (new Set(parsedProjectIds.data).size !== parsedProjectIds.data.length) return invalidFormResult;
+  if (new Set(parsedTaskIds.data).size !== parsedTaskIds.data.length) return invalidFormResult;
+  const projectIds = parsedProjectIds.data;
+  const taskIds = parsedTaskIds.data;
+
+  if (projectIds.length > 0) {
+    const matchingProjects = await db.select({ id: projects.id }).from(projects).where(inArray(projects.id, projectIds));
+    if (matchingProjects.length !== projectIds.length) {
+      return { ok: false, message: "One or more selected projects are no longer available." };
+    }
+  }
+
+  if (taskIds.length > 0) {
+    if (projectIds.length === 0) return invalidFormResult;
+    const matchingTasks = await db.select({ id: projectTasks.id, projectId: projectTasks.projectId })
+      .from(projectTasks)
+      .where(inArray(projectTasks.id, taskIds));
+    if (matchingTasks.length !== taskIds.length || matchingTasks.some((task) => !projectIds.includes(task.projectId))) {
+      return { ok: false, message: "Choose subtasks from the selected projects." };
+    }
+  }
+
+  return runMutation("Today’s Focus projects saved.", "Could not save Today’s Focus projects.", () => db
+    .insert(dashboardSettings)
+    .values({
+      id: "default",
+      purpose: "",
+      focusTitle: "",
+      focusDetail: "",
+      focusActivityId: null,
+      focusProjectIds: projectIds,
+      focusTaskIds: taskIds,
+      meetingFlow: "",
+      footnote: "",
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: dashboardSettings.id,
+      set: { focusProjectIds: projectIds, focusTaskIds: taskIds, updatedAt: new Date() },
+    }));
+}
+
 export async function saveNetworkServerStatusAction(formData: FormData): Promise<MutationResult> {
   const rawServices = formData.get("services");
   if (typeof rawServices !== "string") return invalidFormResult;
@@ -206,19 +267,24 @@ export async function saveCctvStatusAction(formData: FormData): Promise<Mutation
   const parsed = z.object({
     cameraCount: z.coerce.number().int().min(0).max(100000),
     cameraFaultyCount: z.coerce.number().int().min(0).max(100000),
+    cameraFaultReason: z.string().trim().max(2000),
     cameraWaitingRepairCount: z.coerce.number().int().min(0).max(100000),
     cameraRepairingCount: z.coerce.number().int().min(0).max(100000),
     cameraInstallingCount: z.coerce.number().int().min(0).max(100000),
   }).safeParse({
     cameraCount: formData.get("cameraCount"),
     cameraFaultyCount: formData.get("cameraFaultyCount"),
+    cameraFaultReason: formData.get("cameraFaultReason") ?? "",
     cameraWaitingRepairCount: formData.get("cameraWaitingRepairCount"),
     cameraRepairingCount: formData.get("cameraRepairingCount"),
     cameraInstallingCount: formData.get("cameraInstallingCount"),
   });
 
   if (!parsed.success) return invalidFormResult;
-  const { cameraCount, cameraFaultyCount, cameraWaitingRepairCount, cameraRepairingCount, cameraInstallingCount } = parsed.data;
+  const { cameraCount, cameraFaultyCount, cameraFaultReason, cameraWaitingRepairCount, cameraRepairingCount, cameraInstallingCount } = parsed.data;
+  if (cameraFaultyCount > 0 && !cameraFaultReason) {
+    return { ok: false, message: "Enter the reason for the faulty cameras." };
+  }
   if (cameraFaultyCount + cameraWaitingRepairCount + cameraRepairingCount + cameraInstallingCount > cameraCount) {
     return { ok: false, message: "The number of cameras needing attention cannot exceed the total camera count." };
   }
@@ -236,6 +302,7 @@ export async function saveCctvStatusAction(formData: FormData): Promise<Mutation
       footnote: "Dashboard stays shared during the meeting to reduce screen switching and Excel sheet navigation.",
       cameraCount,
       cameraFaultyCount,
+      cameraFaultReason: cameraFaultyCount > 0 ? cameraFaultReason : "",
       cameraWaitingRepairCount,
       cameraRepairingCount,
       cameraInstallingCount,
@@ -245,6 +312,7 @@ export async function saveCctvStatusAction(formData: FormData): Promise<Mutation
     await db.update(dashboardSettings).set({
       cameraCount,
       cameraFaultyCount,
+      cameraFaultReason: cameraFaultyCount > 0 ? cameraFaultReason : "",
       cameraWaitingRepairCount,
       cameraRepairingCount,
       cameraInstallingCount,
@@ -645,9 +713,10 @@ export async function createActivityAction(formData: FormData): Promise<Mutation
     .object({
       section: activitySectionSchema,
       content: z.string().trim().min(2).max(220),
+      severity: activitySeveritySchema,
       completed: z.enum(["true", "false"]).transform((value) => value === "true"),
     })
-    .safeParse({ section: formData.get("section"), content: formData.get("content"), completed: formData.get("completed") ?? "false" });
+    .safeParse({ section: formData.get("section"), content: formData.get("content"), severity: formData.get("severity") ?? "MEDIUM", completed: formData.get("completed") ?? "false" });
 
   if (!parsed.success) return invalidFormResult;
   const today = getBangkokDateKey();
@@ -671,12 +740,14 @@ export async function updateActivityAction(formData: FormData): Promise<Mutation
       id: z.coerce.number().int().positive(),
       section: activitySectionSchema,
       content: z.string().trim().min(2).max(220),
+      severity: activitySeveritySchema,
       completed: z.enum(["true", "false"]),
     })
     .safeParse({
       id: formData.get("id"),
       section: formData.get("section"),
       content: formData.get("content"),
+      severity: formData.get("severity"),
       completed: formData.get("completed"),
     });
 

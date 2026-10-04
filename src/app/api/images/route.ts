@@ -3,7 +3,7 @@ import { writeFile } from "node:fs/promises";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { activities, issues, mediaAttachments, networkServiceStatuses } from "@/db/schema";
+import { activities, dashboardSettings, issues, mediaAttachments, networkServiceStatuses } from "@/db/schema";
 import { deleteStoredMedia, ensureUploadDirectory, getMediaExtension, hasValidMediaSignature, isVideoExtension, mediaPath } from "@/lib/image-uploads";
 
 export const runtime = "nodejs";
@@ -18,6 +18,9 @@ function badRequest(message: string, status = 400) {
 function parseOwner(formData: FormData) {
   const entityType = formData.get("entityType");
   const entityIdValue = formData.get("entityId");
+  if (entityType === "cctv") {
+    return entityIdValue === "default" ? { entityType, entityId: "default" } as const : null;
+  }
   const entityId = typeof entityIdValue === "string" ? Number(entityIdValue) : NaN;
   if ((entityType !== "issue" && entityType !== "activity" && entityType !== "networkService") || !Number.isSafeInteger(entityId) || entityId < 1) return null;
   return { entityType, entityId } as const;
@@ -30,6 +33,10 @@ async function ownerExists(owner: NonNullable<ReturnType<typeof parseOwner>>) {
   }
   if (owner.entityType === "networkService") {
     const [row] = await db.select({ id: networkServiceStatuses.id }).from(networkServiceStatuses).where(eq(networkServiceStatuses.id, owner.entityId)).limit(1);
+    return Boolean(row);
+  }
+  if (owner.entityType === "cctv") {
+    const [row] = await db.select({ id: dashboardSettings.id }).from(dashboardSettings).where(eq(dashboardSettings.id, owner.entityId)).limit(1);
     return Boolean(row);
   }
   const [row] = await db.select({ id: activities.id }).from(activities).where(eq(activities.id, owner.entityId)).limit(1);
@@ -50,7 +57,7 @@ export async function POST(request: Request) {
   }
 
   const owner = parseOwner(formData);
-  if (!owner) return badRequest("Choose a valid issue or activity.");
+  if (!owner) return badRequest("Choose a valid media owner.");
 
   const attachmentIdValue = formData.get("attachmentId");
   if (formData.get("remove") === "true" && typeof attachmentIdValue === "string") {
@@ -60,7 +67,9 @@ export async function POST(request: Request) {
       ? and(eq(mediaAttachments.id, attachmentId), eq(mediaAttachments.issueId, owner.entityId))
       : owner.entityType === "activity"
         ? and(eq(mediaAttachments.id, attachmentId), eq(mediaAttachments.activityId, owner.entityId))
-        : and(eq(mediaAttachments.id, attachmentId), eq(mediaAttachments.networkServiceId, owner.entityId));
+        : owner.entityType === "networkService"
+          ? and(eq(mediaAttachments.id, attachmentId), eq(mediaAttachments.networkServiceId, owner.entityId))
+          : and(eq(mediaAttachments.id, attachmentId), eq(mediaAttachments.dashboardSettingsId, owner.entityId));
     const [attachment] = await db.delete(mediaAttachments).where(conditions).returning({ url: mediaAttachments.url });
     if (!attachment) return badRequest("The media attachment could not be found.", 404);
     await deleteStoredMedia(attachment.url).catch(() => undefined);
@@ -68,7 +77,7 @@ export async function POST(request: Request) {
   }
 
   if (!(await ownerExists(owner))) {
-    const ownerLabel = owner.entityType === "issue" ? "issue" : owner.entityType === "activity" ? "activity" : "network service";
+    const ownerLabel = owner.entityType === "issue" ? "issue" : owner.entityType === "activity" ? "activity" : owner.entityType === "networkService" ? "network service" : "CCTV settings";
     return badRequest(`The ${ownerLabel} could not be found.`, 404);
   }
 
@@ -95,6 +104,7 @@ export async function POST(request: Request) {
       issueId: owner.entityType === "issue" ? owner.entityId : null,
       activityId: owner.entityType === "activity" ? owner.entityId : null,
       networkServiceId: owner.entityType === "networkService" ? owner.entityId : null,
+      dashboardSettingsId: owner.entityType === "cctv" ? owner.entityId : null,
       url,
     }).returning({ id: mediaAttachments.id, url: mediaAttachments.url });
     if (!attachment) throw new Error("Could not create the media attachment.");

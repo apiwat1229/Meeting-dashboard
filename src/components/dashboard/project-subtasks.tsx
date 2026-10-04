@@ -119,24 +119,13 @@ function TaskDatePicker({
   );
 }
 
-function taskSections(task: ProjectTask, yesterday: string, today: string) {
-  const sections = [];
-  if (yesterday.split(/\r?\n/).includes(task.title)) sections.push("Yesterday");
-  if (today.split(/\r?\n/).includes(task.title)) sections.push("Today");
-  return sections.length ? sections.join(" · ") : "—";
-}
-
 export function ProjectTaskManager({
   projectId,
   projectName,
-  yesterday,
-  today,
   tasks,
 }: {
   projectId: number;
   projectName: string;
-  yesterday: string;
-  today: string;
   tasks: ProjectTask[];
 }) {
   const [showCreate, setShowCreate] = useState(false);
@@ -250,7 +239,6 @@ export function ProjectTaskManager({
                 <th scope="col">Subtask</th>
                 <th scope="col">Start</th>
                 <th scope="col">End</th>
-                <th scope="col">Section</th>
                 <th scope="col">Status</th>
               </tr>
             </thead>
@@ -267,7 +255,7 @@ export function ProjectTaskManager({
                     onDelete={() => { setShowCreate(false); setEditingTask(null); setDeleteTask(task); }}
                   >
                     {editingTask?.id === task.id ? (
-                      <td colSpan={5} className="project-task-edit-cell">
+                      <td colSpan={4} className="project-task-edit-cell">
                         <form className="project-task-form project-task-edit-form" onSubmit={(event) => { event.preventDefault(); void saveTask(new FormData(event.currentTarget)); }}>
                           <input type="hidden" name="id" value={task.id} />
                           <input type="hidden" name="projectId" value={projectId} />
@@ -296,7 +284,6 @@ export function ProjectTaskManager({
                         <td className="project-task-title type-body">{task.title}</td>
                         <td className="project-task-date-cell">{formatTaskDate(task.startDate)}</td>
                         <td className="project-task-date-cell">{formatTaskDate(task.endDate)}</td>
-                        <td className="project-task-section-cell">{taskSections(task, yesterday, today)}</td>
                         <td className="project-task-status-cell">
                           {deleteTask?.id === task.id ? (
                             <div className="project-task-delete-confirm">

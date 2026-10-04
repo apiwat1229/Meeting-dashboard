@@ -6,16 +6,15 @@ import { ComboboxSelect } from "@/components/ui/combobox";
 export type IssueActivityOption = {
   id: number;
   content: string;
-  section: "YESTERDAY" | "TODAY" | "OTHER";
+  section: "YESTERDAY" | "TODAY";
 };
 
-type RelatedSection = "none" | "YESTERDAY" | "TODAY" | "OTHER";
+type RelatedSection = "none" | "YESTERDAY" | "TODAY";
 
 const sectionOptions = [
   { value: "none", label: "No linked section" },
-  { value: "TODAY", label: "Today Other Activities" },
-  { value: "YESTERDAY", label: "Yesterday Other Activities" },
-  { value: "OTHER", label: "Other Topics" },
+  { value: "TODAY", label: "Activities" },
+  { value: "YESTERDAY", label: "Yesterday Activities" },
 ];
 
 export function IssueActivityLinkFields({
@@ -25,7 +24,7 @@ export function IssueActivityLinkFields({
   onSelectionChange,
 }: {
   activities: IssueActivityOption[];
-  defaultSection?: "YESTERDAY" | "TODAY" | "OTHER" | null;
+  defaultSection?: "YESTERDAY" | "TODAY" | null;
   defaultActivityId?: number | null;
   onSelectionChange?: (section: RelatedSection, activityId: string) => void;
 }) {

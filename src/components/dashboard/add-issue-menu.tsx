@@ -15,7 +15,7 @@ import { toast } from "@/components/ui/toast";
 import { MediaFilePicker, uploadMediaFiles } from "@/components/dashboard/media-file-picker";
 
 type ProjectOption = { id: number; name: string };
-type RelatedSection = "none" | "YESTERDAY" | "TODAY" | "OTHER";
+type RelatedSection = "none" | "YESTERDAY" | "TODAY";
 
 const severityOptions = [
   { value: "HIGH", label: "High" },
@@ -23,9 +23,8 @@ const severityOptions = [
 ];
 
 const sectionLabels: Record<Exclude<RelatedSection, "none">, string> = {
-  TODAY: "Today Other Activities",
-  YESTERDAY: "Yesterday Other Activities",
-  OTHER: "Other Topics",
+  TODAY: "Activities",
+  YESTERDAY: "Yesterday Activities",
 };
 
 export function AddIssueMenu({ projects, activities }: { projects: ProjectOption[]; activities: IssueActivityOption[] }) {

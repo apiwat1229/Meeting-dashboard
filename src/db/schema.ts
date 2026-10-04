@@ -6,6 +6,8 @@ export const projectStatus = pgEnum("project_status", ["ON_TRACK", "ATTENTION", 
 export const projectTaskStatus = pgEnum("project_task_status", ["TODO", "IN_PROGRESS", "DONE"]);
 export const issueSeverity = pgEnum("issue_severity", ["HIGH", "MEDIUM", "LOW"]);
 export const issueState = pgEnum("issue_state", ["OPEN", "CLOSED"]);
+export const activitySeverity = pgEnum("activity_severity", ["HIGH", "MEDIUM"]);
+// Keep OTHER for existing PostgreSQL enums; dashboard data normalizes it into TODAY.
 export const activitySection = pgEnum("activity_section", ["YESTERDAY", "TODAY", "OTHER"]);
 export const networkServiceStatuses = pgTable(
   "network_service_statuses",
@@ -68,6 +70,7 @@ export const activities = pgTable("activities", {
   id: serial("id").primaryKey(),
   section: activitySection("section").notNull(),
   content: varchar("content", { length: 220 }).notNull(),
+  severity: activitySeverity("severity").notNull().default("MEDIUM"),
   imageUrl: text("image_url").notNull().default(""),
   completed: boolean("completed").notNull().default(false),
   activityDate: date("activity_date", { mode: "string" }).notNull().defaultNow(),
@@ -95,30 +98,6 @@ export const issues = pgTable(
   },
 );
 
-export const mediaAttachments = pgTable(
-  "media_attachments",
-  {
-    id: serial("id").primaryKey(),
-    issueId: integer("issue_id").references(() => issues.id, { onDelete: "cascade" }),
-    activityId: integer("activity_id").references(() => activities.id, { onDelete: "cascade" }),
-    networkServiceId: integer("network_service_id").references(() => networkServiceStatuses.id, { onDelete: "cascade" }),
-    url: text("url").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    check("media_attachments_single_owner", sql`num_nonnulls(${table.issueId}, ${table.activityId}, ${table.networkServiceId}) = 1`),
-    index("media_attachments_issue_id_idx").on(table.issueId, table.id),
-    index("media_attachments_activity_id_idx").on(table.activityId, table.id),
-    index("media_attachments_network_service_id_idx").on(table.networkServiceId, table.id),
-  ],
-);
-
-export const themeSettings = pgTable("theme_settings", {
-  id: varchar("id", { length: 40 }).primaryKey(),
-  config: jsonb("config").$type<ThemeConfig>().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
 export const dashboardSettings = pgTable("dashboard_settings", {
   id: varchar("id", { length: 40 }).primaryKey(),
   owner: varchar("owner", { length: 80 }).notNull().default("IT"),
@@ -127,13 +106,42 @@ export const dashboardSettings = pgTable("dashboard_settings", {
   focusTitle: varchar("focus_title", { length: 140 }).notNull(),
   focusDetail: text("focus_detail").notNull(),
   focusActivityId: integer("focus_activity_id").references(() => activities.id, { onDelete: "set null" }),
+  focusProjectIds: jsonb("focus_project_ids").$type<number[]>().notNull().default(sql`'[]'::jsonb`),
+  focusTaskIds: jsonb("focus_task_ids").$type<number[]>().notNull().default(sql`'[]'::jsonb`),
   meetingFlow: text("meeting_flow").notNull(),
   footnote: text("footnote").notNull(),
   cameraCount: integer("camera_count").notNull().default(135),
   cameraFaultyCount: integer("camera_faulty_count").notNull().default(0),
+  cameraFaultReason: text("camera_fault_reason").notNull().default(""),
   cameraWaitingRepairCount: integer("camera_waiting_repair_count").notNull().default(0),
   cameraRepairingCount: integer("camera_repairing_count").notNull().default(0),
   cameraInstallingCount: integer("camera_installing_count").notNull().default(0),
   recorderStatus: varchar("recorder_status", { length: 40 }).notNull().default("OK"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const mediaAttachments = pgTable(
+  "media_attachments",
+  {
+    id: serial("id").primaryKey(),
+    issueId: integer("issue_id").references(() => issues.id, { onDelete: "cascade" }),
+    activityId: integer("activity_id").references(() => activities.id, { onDelete: "cascade" }),
+    networkServiceId: integer("network_service_id").references(() => networkServiceStatuses.id, { onDelete: "cascade" }),
+    dashboardSettingsId: varchar("dashboard_settings_id", { length: 40 }).references(() => dashboardSettings.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check("media_attachments_single_owner", sql`num_nonnulls(${table.issueId}, ${table.activityId}, ${table.networkServiceId}, ${table.dashboardSettingsId}) = 1`),
+    index("media_attachments_issue_id_idx").on(table.issueId, table.id),
+    index("media_attachments_activity_id_idx").on(table.activityId, table.id),
+    index("media_attachments_network_service_id_idx").on(table.networkServiceId, table.id),
+    index("media_attachments_dashboard_settings_id_idx").on(table.dashboardSettingsId, table.id),
+  ],
+);
+
+export const themeSettings = pgTable("theme_settings", {
+  id: varchar("id", { length: 40 }).primaryKey(),
+  config: jsonb("config").$type<ThemeConfig>().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

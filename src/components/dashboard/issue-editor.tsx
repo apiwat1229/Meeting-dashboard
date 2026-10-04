@@ -18,7 +18,7 @@ type IssueEditorData = {
   id: number;
   title: string;
   projectId: number | null;
-  relatedSection: "YESTERDAY" | "TODAY" | "OTHER" | null;
+  relatedSection: "YESTERDAY" | "TODAY" | null;
   relatedActivityId: number | null;
   relatedActivityTitle: string | null;
   severity: "HIGH" | "MEDIUM" | "LOW";

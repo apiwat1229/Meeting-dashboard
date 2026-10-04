@@ -61,9 +61,9 @@ try {
         ('TODAY', 'Vendor meeting 10:00', FALSE, 1, $2::date),
         ('TODAY', 'PC setup ×3', FALSE, 2, $2::date),
         ('TODAY', 'Warehouse Wi-Fi check', FALSE, 3, $2::date),
-        ('OTHER', 'Antivirus quotation received', FALSE, 1, $2::date),
-        ('OTHER', 'Server maintenance: 3 Oct', FALSE, 2, $2::date),
-        ('OTHER', 'M365 license review started', FALSE, 3, $2::date)`,
+        ('TODAY', 'Antivirus quotation received', FALSE, 4, $2::date),
+        ('TODAY', 'Server maintenance: 3 Oct', FALSE, 5, $2::date),
+        ('TODAY', 'M365 license review started', FALSE, 6, $2::date)`,
       [yesterdayDate, todayDate],
     );
   }

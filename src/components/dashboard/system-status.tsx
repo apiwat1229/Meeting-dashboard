@@ -29,11 +29,20 @@ type ServiceDraft = Omit<NetworkService, "media"> & { status: ServiceStatus };
 type CctvSettings = {
   cameraCount: number;
   cameraFaultyCount: number;
+  cameraFaultReason: string;
   cameraWaitingRepairCount: number;
   cameraRepairingCount: number;
   cameraInstallingCount: number;
+  media: Array<{ id: number; url: string }>;
 };
-type CctvDraft = Record<keyof CctvSettings, string>;
+type CctvDraft = {
+  cameraCount: string;
+  cameraFaultyCount: string;
+  cameraFaultReason: string;
+  cameraWaitingRepairCount: string;
+  cameraRepairingCount: string;
+  cameraInstallingCount: string;
+};
 
 const serviceStatusOptions = [
   { value: "UNKNOWN", label: "Not set" },
@@ -56,6 +65,7 @@ function createCctvDraft(settings: CctvSettings): CctvDraft {
   return {
     cameraCount: String(settings.cameraCount),
     cameraFaultyCount: String(settings.cameraFaultyCount),
+    cameraFaultReason: settings.cameraFaultReason,
     cameraWaitingRepairCount: String(settings.cameraWaitingRepairCount),
     cameraRepairingCount: String(settings.cameraRepairingCount),
     cameraInstallingCount: String(settings.cameraInstallingCount),
@@ -125,27 +135,28 @@ function getCctvIssueCounts(settings: CctvSettings) {
   ];
 }
 
-function SavedServiceMedia({ service, pending, onRemove }: {
-  service: NetworkService;
+function SavedMedia({ label, media, pending, onRemove }: {
+  label: string;
+  media: Array<{ id: number; url: string }>;
   pending?: boolean;
-  onRemove?: (serviceId: number, attachmentId: number) => void;
+  onRemove?: (attachmentId: number) => void;
 }) {
-  if (service.media.length === 0) return null;
+  if (media.length === 0) return null;
   return (
-    <div className="system-service-media-list" aria-label={`Existing evidence for ${service.label}`}>
-      {service.media.map((media) => {
-        const video = /\.(mp4|webm)(?:$|\?)/i.test(media.url);
+    <div className="system-service-media-list" aria-label={`Existing evidence for ${label}`}>
+      {media.map((attachment) => {
+        const video = /\.(mp4|webm)(?:$|\?)/i.test(attachment.url);
         return (
-          <article className="system-service-media-item" key={media.id}>
+          <article className="system-service-media-item" key={attachment.id}>
             {video ? (
-              <video src={media.url} controls playsInline preload="metadata" aria-label={`Video evidence for ${service.label}`} />
+              <video src={attachment.url} controls playsInline preload="metadata" aria-label={`Video evidence for ${label}`} />
             ) : (
-              <a href={media.url} target="_blank" rel="noreferrer" aria-label={`Open image evidence for ${service.label}`}>
-                <Image src={media.url} alt={`Evidence for ${service.label}`} width={220} height={140} unoptimized />
+              <a href={attachment.url} target="_blank" rel="noreferrer" aria-label={`Open image evidence for ${label}`}>
+                <Image src={attachment.url} alt={`Evidence for ${label}`} width={220} height={140} unoptimized />
               </a>
             )}
             {onRemove && (
-              <button type="button" className="system-service-media-remove" onClick={() => onRemove(service.id, media.id)} disabled={pending}>
+              <button type="button" className="system-service-media-remove" onClick={() => onRemove(attachment.id)} disabled={pending}>
                 Remove attachment
               </button>
             )}
@@ -161,50 +172,24 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
   const networkSummary = getNetworkSummary(networkServices);
   const cctvSummary = getCctvSummary(cctv);
   const cctvIssueCounts = getCctvIssueCounts(cctv);
-  const cctvAttentionCount = cctvIssueCounts.reduce((sum, item) => sum + item.count, 0);
-  const cctvWorkingCount = Math.max(0, cctv.cameraCount - cctvAttentionCount);
   const [networkOpen, setNetworkOpen] = useState(false);
   const [cctvOpen, setCctvOpen] = useState(false);
-  const [networkDetailsOpen, setNetworkDetailsOpen] = useState(false);
-  const [cctvDetailsOpen, setCctvDetailsOpen] = useState(false);
   const [networkPending, setNetworkPending] = useState(false);
   const [cctvPending, setCctvPending] = useState(false);
   const [serviceDrafts, setServiceDrafts] = useState<ServiceDraft[]>(() => createServiceDrafts(networkServices));
   const [pendingMedia, setPendingMedia] = useState<Record<number, File[]>>({});
   const [cctvDraft, setCctvDraft] = useState<CctvDraft>(() => createCctvDraft(cctv));
-
-  function activateNetworkCard() {
-    const abnormalServices = networkServices.filter((service) => service.status === "ABNORMAL");
-    if (abnormalServices.length > 0) {
-      setNetworkDetailsOpen(true);
-      return;
-    }
-    const allNormal = networkServices.length > 0 && networkServices.every((service) => service.status === "NORMAL");
-    toast[allNormal ? "success" : "info"](allNormal
-      ? "Network & Server is working normally."
-      : "Network & Server status has not been fully reported.");
-  }
-
-  function activateCctvCard() {
-    if (cctvAttentionCount > 0) {
-      setCctvDetailsOpen(true);
-      return;
-    }
-    toast[cctv.cameraCount > 0 ? "success" : "info"](cctv.cameraCount > 0
-      ? "CCTV is working normally."
-      : "No CCTV cameras have been reported.");
-  }
+  const [pendingCctvMedia, setPendingCctvMedia] = useState<File[]>([]);
 
   function editNetworkStatus() {
-    setNetworkDetailsOpen(false);
     setServiceDrafts(createServiceDrafts(networkServices));
     setPendingMedia({});
     setNetworkOpen(true);
   }
 
   function editCctvStatus() {
-    setCctvDetailsOpen(false);
     setCctvDraft(createCctvDraft(cctv));
+    setPendingCctvMedia([]);
     setCctvOpen(true);
   }
 
@@ -218,23 +203,27 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
 
   function closeCctvDialog(open: boolean) {
     setCctvOpen(open);
-    if (!open && !cctvPending) setCctvDraft(createCctvDraft(cctv));
+    if (!open && !cctvPending) {
+      setCctvDraft(createCctvDraft(cctv));
+      setPendingCctvMedia([]);
+    }
   }
 
   function updateService(id: number, update: Partial<ServiceDraft>) {
     setServiceDrafts((current) => current.map((service) => service.id === id ? { ...service, ...update } : service));
   }
 
-  function updateCctv(event: ChangeEvent<HTMLInputElement>) {
-    const key = event.currentTarget.name as keyof CctvSettings;
+  function updateCctv(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
+    const key = event.currentTarget.name as keyof CctvDraft;
     const value = event.currentTarget.value;
     setCctvDraft((current) => ({ ...current, [key]: value }));
+    if (key === "cameraFaultyCount" && Number(value) === 0) setPendingCctvMedia([]);
   }
 
-  async function removeSavedMedia(serviceId: number, attachmentId: number) {
+  async function removeSavedMedia(entityType: "networkService" | "cctv", entityId: number | "default", attachmentId: number) {
     const formData = new FormData();
-    formData.set("entityType", "networkService");
-    formData.set("entityId", String(serviceId));
+    formData.set("entityType", entityType);
+    formData.set("entityId", String(entityId));
     formData.set("attachmentId", String(attachmentId));
     formData.set("remove", "true");
     try {
@@ -297,9 +286,12 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
         toast.error(result.message);
         return;
       }
+      const uploadResult = await uploadMediaFiles("cctv", "default", pendingCctvMedia);
       router.refresh();
+      setPendingCctvMedia([]);
       closeCctvDialog(false);
-      toast.success(result.message);
+      if (uploadResult.failed.length > 0) toast.error(`CCTV status saved; ${uploadResult.uploaded} photos uploaded, ${uploadResult.failed.length} failed.`);
+      else toast.success(uploadResult.uploaded > 0 ? `CCTV status saved with ${uploadResult.uploaded} photos.` : result.message);
     } catch {
       toast.error("Could not save CCTV status.");
     } finally {
@@ -310,78 +302,21 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
   return (
     <>
       <Card className="summary-card summary-systems-card">
-        <div className="summary-card-content">
-          <div className="summary-breakdown summary-breakdown-2" aria-label="Network and CCTV status">
-            <ContextMenu as="div" role="button" className={`summary-breakdown-item summary-${networkSummary.tone} summary-systems-trigger`} ariaLabel={`${networkSummary.ariaLabel}. Right-click to edit.`} onActivate={activateNetworkCard} onEdit={editNetworkStatus}>
-              <strong className="summary-breakdown-title">Network &amp; Server</strong>
-              <strong>{networkSummary.value}</strong>
-              <span>{networkSummary.label}</span>
-              {networkSummary.detail && <small>{networkSummary.detail}</small>}
-            </ContextMenu>
-            <ContextMenu as="div" role="button" className={`summary-breakdown-item summary-${cctvSummary.tone} summary-systems-trigger`} ariaLabel={`${cctvSummary.ariaLabel}. Right-click to edit.`} onActivate={activateCctvCard} onEdit={editCctvStatus}>
-              <strong className="summary-breakdown-title">CCTV</strong>
-              <strong>{cctvSummary.value}</strong>
-              <span>{cctvSummary.label}</span>
-              {cctvSummary.detail && <small>{cctvSummary.detail}</small>}
-            </ContextMenu>
-          </div>
-        </div>
+        <ContextMenu as="div" role="button" className={`summary-breakdown-item summary-${networkSummary.tone} summary-systems-trigger`} ariaLabel={`${networkSummary.ariaLabel}. Click to configure.`} onActivate={editNetworkStatus} onEdit={editNetworkStatus}>
+          <strong className="summary-breakdown-title">Network &amp; Server</strong>
+          <strong>{networkSummary.value}</strong>
+          <span>{networkSummary.label}</span>
+          {networkSummary.detail && <small>{networkSummary.detail}</small>}
+        </ContextMenu>
       </Card>
-
-      <Dialog open={networkDetailsOpen} onOpenChange={setNetworkDetailsOpen}>
-        <DialogContent className="detail-dialog-content system-status-detail-dialog">
-          <div className="detail-dialog-header">
-            <div>
-              <DialogTitle>Network &amp; Server issues</DialogTitle>
-              <DialogDescription>Services reported as abnormal and their supporting details.</DialogDescription>
-            </div>
-            <DialogClose className="icon-button project-tasks-close" aria-label="Close Network & Server details"><X size={17} /></DialogClose>
-          </div>
-          <div className="network-service-list">
-            {networkServices.filter((service) => service.status === "ABNORMAL").map((service) => (
-              <section className="network-service-card network-service-card-abnormal" key={service.id}>
-                <div className="network-service-heading">
-                  <h3>{service.label}</h3>
-                  <strong className="system-status-abnormal-label">Abnormal</strong>
-                </div>
-                <div className="system-status-detail-copy">
-                  <div><h4>Reason</h4><p>{service.reason || "No reason provided."}</p></div>
-                  <div><h4>Details</h4><p>{service.detail || "No additional details provided."}</p></div>
-                </div>
-                {service.media.length > 0 && <SavedServiceMedia service={service} />}
-              </section>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={cctvDetailsOpen} onOpenChange={setCctvDetailsOpen}>
-        <DialogContent className="detail-dialog-content system-status-detail-dialog cctv-detail-dialog">
-          <div className="detail-dialog-header">
-            <div>
-              <DialogTitle>CCTV details</DialogTitle>
-              <DialogDescription>Camera totals by current status.</DialogDescription>
-            </div>
-            <DialogClose className="icon-button project-tasks-close" aria-label="Close CCTV details"><X size={17} /></DialogClose>
-          </div>
-          <div className="system-status-detail-grid">
-            <div className="system-status-detail-metric system-status-detail-metric-primary">
-              <span>Working</span>
-              <strong>{cctvWorkingCount}</strong>
-            </div>
-            <div className="system-status-detail-metric">
-              <span>Total cameras</span>
-              <strong>{cctv.cameraCount}</strong>
-            </div>
-            {cctvIssueCounts.map((item) => (
-              <div className="system-status-detail-metric" key={item.label}>
-                <span>{item.label}</span>
-                <strong>{item.count}</strong>
-              </div>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <Card className="summary-card summary-systems-card">
+        <ContextMenu as="div" role="button" className={`summary-breakdown-item summary-${cctvSummary.tone} summary-systems-trigger`} ariaLabel={`${cctvSummary.ariaLabel}. Click to configure.`} onActivate={editCctvStatus} onEdit={editCctvStatus}>
+          <strong className="summary-breakdown-title">CCTV</strong>
+          <strong>{cctvSummary.value}</strong>
+          <span>{cctvSummary.label}</span>
+          {cctvSummary.detail && <small>{cctvSummary.detail}</small>}
+        </ContextMenu>
+      </Card>
 
       <Dialog open={networkOpen} onOpenChange={closeNetworkDialog}>
         <DialogContent className="detail-dialog-content system-status-dialog network-status-dialog">
@@ -429,7 +364,7 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
                         />
                       </div>
                     )}
-                    <SavedServiceMedia service={savedService} pending={networkPending} onRemove={(serviceId, attachmentId) => { void removeSavedMedia(serviceId, attachmentId); }} />
+                    <SavedMedia label={service.label} media={savedService.media} pending={networkPending} onRemove={(attachmentId) => { void removeSavedMedia("networkService", service.id, attachmentId); }} />
                   </section>
                 );
               })}
@@ -447,7 +382,7 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
           <div className="detail-dialog-header">
             <div>
               <DialogTitle>CCTV</DialogTitle>
-              <DialogDescription>Enter the total number of cameras and their current service counts.</DialogDescription>
+              <DialogDescription>Enter the camera total and status counts. Add a reason and photos when any cameras are faulty.</DialogDescription>
             </div>
             <DialogClose className="icon-button project-tasks-close" aria-label="Close CCTV status"><X size={17} /></DialogClose>
           </div>
@@ -471,7 +406,28 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
                 </label>
               </div>
               <p className="cctv-count-help">The four status counts together cannot exceed the total camera count.</p>
+              {Number(cctvDraft.cameraFaultyCount) > 0 && (
+                <div className="cctv-fault-fields">
+                  <label className="field-label">Reason for faulty cameras
+                    <Textarea name="cameraFaultReason" required maxLength={2000} rows={3} value={cctvDraft.cameraFaultReason} onChange={updateCctv} placeholder="Describe why the cameras are faulty" />
+                  </label>
+                  <MediaFilePicker
+                    files={pendingCctvMedia}
+                    pending={cctvPending}
+                    onFilesChange={setPendingCctvMedia}
+                    className="network-service-upload"
+                    frameClassName="network-service-upload-grid"
+                    label="CCTV fault photos"
+                  />
+                </div>
+              )}
             </section>
+            <SavedMedia
+              label="CCTV"
+              media={cctv.media}
+              pending={cctvPending}
+              onRemove={(attachmentId) => { void removeSavedMedia("cctv", "default", attachmentId); }}
+            />
             <div className="project-edit-actions">
               <Button type="button" variant="secondary" onClick={() => closeCctvDialog(false)} disabled={cctvPending}>Cancel</Button>
               <Button type="submit" disabled={cctvPending}>{cctvPending ? "Saving…" : "Save status"}</Button>
