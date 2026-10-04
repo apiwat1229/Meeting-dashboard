@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
 import { createProjectAction, deleteProjectAction, updateProjectAction } from "@/app/actions";
 import { ConfirmActionDialog } from "@/components/ui/alert-dialog";
@@ -14,6 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { ProjectDetailsDialog } from "@/components/dashboard/detail-dialogs";
+import { DatePickerField } from "@/components/dashboard/date-picker-field";
 
 type ProjectTaskData = {
   id: number;
@@ -43,7 +44,15 @@ type ProjectData = {
   endDate: string | null;
 };
 
-export function AddProjectMenu() {
+const ProjectCreateContext = createContext<{ open: boolean; openCreateProject: () => void } | null>(null);
+
+function useProjectCreateContext() {
+  const context = useContext(ProjectCreateContext);
+  if (!context) throw new Error("Project controls must be inside ProjectCreateProvider.");
+  return context;
+}
+
+export function ProjectCreateProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
 
   async function handleCreate(formData: FormData) {
@@ -57,37 +66,48 @@ export function AddProjectMenu() {
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className="icon-button" aria-label={open ? "Close project form" : "Add project"} title={open ? "Close" : "Add project"}>
-        {open ? <X size={18} /> : <Plus size={18} />}
-      </PopoverTrigger>
-      <PopoverContent className="crud-popover" align="end">
-        <div className="crud-popover-heading">
-          <h3 className="type-h3">New project</h3>
-          <Button type="button" variant="ghost" className="icon-button" onClick={() => setOpen(false)} aria-label="Close project form" title="Close"><X size={17} /></Button>
-        </div>
-        <form action={handleCreate} className="crud-form">
-          <label className="field-label">Project name<Input name="name" minLength={2} maxLength={140} required placeholder="Project name" /></label>
-          <div className="field-pair">
-            <label className="field-label">Status
-              <ComboboxSelect name="status" options={projectStatusOptions} defaultValue="ON_TRACK" />
-            </label>
-            <label className="field-label">Progress %<Input name="progress" type="number" min="0" max="100" defaultValue="0" required /></label>
+    <ProjectCreateContext.Provider value={{ open, openCreateProject: () => setOpen(true) }}>
+      <Popover open={open} onOpenChange={setOpen}>
+        {children}
+        <PopoverContent className="crud-popover" align="end">
+          <div className="crud-popover-heading">
+            <h3 className="type-h3">New project</h3>
+            <Button type="button" variant="ghost" className="icon-button" onClick={() => setOpen(false)} aria-label="Close project form" title="Close"><X size={17} /></Button>
           </div>
-          <div className="field-pair">
-            <label className="field-label">Start Date<Input name="startDate" type="date" /></label>
-            <label className="field-label">End Date<Input name="endDate" type="date" /></label>
-          </div>
-          <label className="field-label">Yesterday<Input name="yesterday" maxLength={500} placeholder="Previous update" /></label>
-          <label className="field-label">Today<Input name="today" maxLength={500} placeholder="Today's next step" /></label>
-          <Button type="submit"><Plus size={15} /> Save project</Button>
-        </form>
-      </PopoverContent>
-    </Popover>
+          <form action={handleCreate} className="crud-form">
+            <label className="field-label">Project name<Input name="name" minLength={2} maxLength={140} required placeholder="Project name" /></label>
+            <div className="field-pair">
+              <label className="field-label">Status
+                <ComboboxSelect name="status" options={projectStatusOptions} defaultValue="ON_TRACK" />
+              </label>
+              <label className="field-label">Progress %<Input name="progress" type="number" min="0" max="100" defaultValue="0" required /></label>
+            </div>
+            <div className="field-pair date-field-pair">
+              <DatePickerField label="Start Date" name="startDate" />
+              <DatePickerField label="End Date" name="endDate" />
+            </div>
+            <label className="field-label">Yesterday<Input name="yesterday" maxLength={500} placeholder="Previous update" /></label>
+            <label className="field-label">Today<Input name="today" maxLength={500} placeholder="Today's next step" /></label>
+            <Button type="submit"><Plus size={15} /> Save project</Button>
+          </form>
+        </PopoverContent>
+      </Popover>
+    </ProjectCreateContext.Provider>
+  );
+}
+
+export function AddProjectMenu({ children }: { children: ReactNode }) {
+  const { open } = useProjectCreateContext();
+
+  return (
+    <PopoverTrigger className="today-focus-title-trigger" aria-haspopup="dialog" aria-expanded={open}>
+      {children}
+    </PopoverTrigger>
   );
 }
 
 export function ProjectEditor({ project, tasks, children }: { project: ProjectData; tasks: ProjectTaskData[]; children: ReactNode }) {
+  const { openCreateProject } = useProjectCreateContext();
   const [open, setOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -142,7 +162,7 @@ export function ProjectEditor({ project, tasks, children }: { project: ProjectDa
       setOpen(false);
       setDetailsOpen(false);
       setConfirmDelete(true);
-    }}>
+    }} onCreate={openCreateProject} createLabel="New project">
       {children}
       <Dialog open={open} onOpenChange={(nextOpen) => {
         if (!nextOpen && confirmDelete) return;
@@ -169,9 +189,9 @@ export function ProjectEditor({ project, tasks, children }: { project: ProjectDa
                     </label>
                     <label className="field-label">Progress %<Input name="progress" type="number" min="0" max="100" defaultValue={project.progress} required /></label>
                   </div>
-                  <div className="field-pair">
-                    <label className="field-label">Start Date<Input name="startDate" type="date" defaultValue={project.startDate ?? ""} /></label>
-                    <label className="field-label">End Date<Input name="endDate" type="date" defaultValue={project.endDate ?? ""} /></label>
+                  <div className="field-pair date-field-pair">
+                    <DatePickerField label="Start Date" name="startDate" defaultValue={project.startDate} />
+                    <DatePickerField label="End Date" name="endDate" defaultValue={project.endDate} />
                   </div>
                 </section>
                 <section className="project-edit-card project-edit-updates">

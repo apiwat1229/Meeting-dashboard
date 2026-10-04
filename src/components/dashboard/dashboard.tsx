@@ -4,19 +4,22 @@ import {
   CircleAlert,
   FolderKanban,
   ListTodo,
+  LogOut,
   Settings2,
 } from "lucide-react";
+import { logoutAction } from "@/app/auth-actions";
 import type { getDashboardData } from "@/lib/data";
 import { Card } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { ReportDatePicker } from "@/components/dashboard/report-date-picker";
 import { ActivityEditor, AddActivityMenu } from "@/components/dashboard/activity-crud";
 import { ActivityStatusIndicator } from "@/components/dashboard/activity-status-indicator";
-import { AddProjectMenu, ProjectEditor } from "@/components/dashboard/project-crud";
+import { AddProjectMenu, ProjectCreateProvider, ProjectEditor } from "@/components/dashboard/project-crud";
 import { DailyRefresh } from "@/components/dashboard/daily-refresh";
 import { FullScreenToggle } from "@/components/dashboard/full-screen-toggle";
 import { TodayFocus } from "@/components/dashboard/today-focus";
 import { SystemStatusPanel } from "@/components/dashboard/system-status";
+import { dashboardSectionNumbers } from "@/lib/dashboard-section-numbers";
 
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
 type ProjectStatus = DashboardData["projects"][number]["status"];
@@ -83,8 +86,10 @@ function SummaryBreakdown({
 function ProjectRow({ project, tasks, index }: { project: DashboardData["projects"][number]; tasks: DashboardData["projectTasks"]; index: number }) {
   return (
     <ProjectEditor project={project} tasks={tasks}>
-      <span className="project-index type-body" role="cell">{index + 1}.</span>
-      <div className="project-name type-body" role="cell">{project.name}</div>
+      <div className="project-name type-body" role="cell">
+        <span className="project-index">{dashboardSectionNumbers.activeProjects}.{index + 1}</span>
+        <span className="project-name-label">{project.name}</span>
+      </div>
       <span className="project-work type-body" role="cell">{project.yesterday || "—"}</span>
       <span className="project-work type-body" role="cell">{project.today || "—"}</span>
       <span className="project-schedule-range type-caption" role="cell">{formatProjectDateRange(project.startDate, project.endDate)}</span>
@@ -104,63 +109,65 @@ function ProjectSection({ data }: { data: DashboardData }) {
   const inProgressCount = data.projects.length - delayCount - finishCount;
 
   return (
-    <Card className="content-card project-card main-overview-projects" aria-labelledby="active-projects-title">
-      <div className="section-heading project-heading">
-        <div className="project-heading-copy">
-          <h2 className="type-h2" id="active-projects-title">Active Projects</h2>
-        </div>
-        <div className="project-status-summary">
-          <SummaryBreakdown
-            label={`${data.projects.length} Projects, ${delayCount} Delayed, ${inProgressCount} Ongoing`}
-            columns={3}
-            items={[
-              { value: data.projects.length, label: "Projects", tone: "neutral" },
-              { value: delayCount, label: "Delayed", tone: "danger" },
-              { value: inProgressCount, label: "Ongoing", tone: "success" },
-            ]}
-          />
-        </div>
-        <div className="project-legend" role="group" aria-label="Project status legend">
-          <span className="project-legend-item"><span className="project-legend-swatch legend-in-progress" aria-hidden="true" />On schedule</span>
-          <span className="project-legend-item"><span className="project-legend-swatch legend-delay" aria-hidden="true" />Delayed</span>
-          <span className="project-legend-item"><span className="project-legend-swatch legend-finish" aria-hidden="true" />Early</span>
-        </div>
-        <AddProjectMenu />
-      </div>
-      <div className="project-table" role="table" aria-label="Project progress">
-        <div className="project-header type-caption" role="row">
-          <span role="columnheader">No.</span>
-          <span role="columnheader">Project</span>
-          <span role="columnheader">Yesterday</span>
-          <span role="columnheader">Today</span>
-          <span role="columnheader">Start / End</span>
-          <span role="columnheader">Progress</span>
-        </div>
-        <div className="project-body" role="rowgroup">
-          {data.projects.map((project, index) => (
-            <ProjectRow
-              key={project.id}
-              project={project}
-              tasks={data.projectTasks.filter((task) => task.projectId === project.id)}
-              index={index}
+    <ProjectCreateProvider>
+      <Card className="content-card project-card main-overview-projects" aria-labelledby="active-projects-title">
+        <div className="section-heading project-heading">
+          <div className="project-heading-copy">
+            <AddProjectMenu>
+              <h2 className="type-h2" id="active-projects-title">{dashboardSectionNumbers.activeProjects}. Active Projects</h2>
+            </AddProjectMenu>
+          </div>
+          <div className="project-status-summary">
+            <SummaryBreakdown
+              label={`${data.projects.length} Projects, ${delayCount} Delayed, ${inProgressCount} Ongoing`}
+              columns={3}
+              items={[
+                { value: data.projects.length, label: "Projects", tone: "neutral" },
+                { value: delayCount, label: "Delayed", tone: "danger" },
+                { value: inProgressCount, label: "Ongoing", tone: "success" },
+              ]}
             />
-          ))}
-          {data.projects.length === 0 && (
-            <div className="project-empty-row" role="row">
-              <div role="cell" aria-colspan={6}>
-                <Empty className="dashboard-empty">
-                  <EmptyMedia variant="icon"><FolderKanban size={16} /></EmptyMedia>
-                  <EmptyHeader>
-                    <EmptyTitle>No active projects</EmptyTitle>
-                    <EmptyDescription>Add a project to start tracking progress.</EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              </div>
-            </div>
-          )}
+          </div>
+          <div className="project-legend" role="group" aria-label="Project status legend">
+            <span className="project-legend-item"><span className="project-legend-swatch legend-in-progress" aria-hidden="true" />On schedule</span>
+            <span className="project-legend-item"><span className="project-legend-swatch legend-delay" aria-hidden="true" />Delayed</span>
+            <span className="project-legend-item"><span className="project-legend-swatch legend-finish" aria-hidden="true" />Early</span>
+          </div>
         </div>
-      </div>
-    </Card>
+        <div className="project-table" role="table" aria-label="Project progress">
+          <div className="project-header type-caption" role="row">
+            <span role="columnheader">Project Name</span>
+            <span role="columnheader">Yesterday Task</span>
+            <span role="columnheader">Today Task</span>
+            <span role="columnheader">Start / End</span>
+            <span role="columnheader">Progress</span>
+          </div>
+          <div className="project-body" role="rowgroup">
+            {data.projects.map((project, index) => (
+              <ProjectRow
+                key={project.id}
+                project={project}
+                tasks={data.projectTasks.filter((task) => task.projectId === project.id)}
+                index={index}
+              />
+            ))}
+            {data.projects.length === 0 && (
+              <div className="project-empty-row" role="row">
+                <div role="cell" aria-colspan={5}>
+                  <Empty className="dashboard-empty">
+                    <EmptyMedia variant="icon"><FolderKanban size={16} /></EmptyMedia>
+                    <EmptyHeader>
+                      <EmptyTitle>No active projects</EmptyTitle>
+                      <EmptyDescription>Add a project to start tracking progress.</EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+    </ProjectCreateProvider>
   );
 }
 
@@ -173,14 +180,20 @@ function ActivitySection({
   title: string;
   data: DashboardData;
 }) {
-  const entries = data.activities.filter((item) => item.section === section);
+  const entries = data.activities.filter(
+    (item): item is (typeof data.activities)[number] & { section: "YESTERDAY" | "TODAY" } => item.section === section,
+  );
   const relatedIssues = data.issues.filter((issue) => issue.relatedSection === section);
+  const sectionNumber = section === "TODAY"
+    ? dashboardSectionNumbers.todayActivities
+    : dashboardSectionNumbers.yesterdayActivities;
 
   return (
-    <Card className="activity-card" aria-label={title}>
+    <Card className="activity-card" aria-label={`${sectionNumber}. ${title}`}>
       <div className="section-heading activity-heading">
-        <h2 className="type-h2">{title}</h2>
-        <AddActivityMenu section={section} />
+        <AddActivityMenu section={section}>
+          <h2 className="type-h2">{sectionNumber}. {title}</h2>
+        </AddActivityMenu>
       </div>
       <ul className="activity-list">
         {entries.map((activity, index) => (
@@ -201,7 +214,7 @@ function ActivitySection({
                 highPriority={activity.severity === "HIGH"}
               />
             ) : null}
-            <span className="activity-number" aria-hidden="true">{index + 1}.</span>
+            <span className="activity-number" aria-hidden="true">{sectionNumber}.{index + 1}</span>
             <span className="activity-content type-body">{activity.content}</span>
             {(activity.isCarryover || activity.willCarryOver) && (
               <span className={`activity-carryover-tag ${activity.willCarryOver ? "activity-carryover-pending" : "activity-carryover-today"}`}>
@@ -227,11 +240,11 @@ function ActivitySection({
         <section className="section-linked-issues" aria-label={`Issues related to ${title}`}>
           <h3><CircleAlert size={14} aria-hidden="true" /> Related issues</h3>
           <ul className="section-linked-issue-list">
-            {relatedIssues.map((issue) => (
+            {relatedIssues.map((issue, index) => (
               <li key={issue.id} className={`section-linked-issue section-linked-${issueTone(issue)}`}>
                 <span className="section-linked-issue-dot" aria-hidden="true" />
                 <div>
-                  <strong>{issue.title}</strong>
+                  <strong>{sectionNumber}.{entries.length + index + 1} {issue.title}</strong>
                   {issue.relatedActivityTitle && <span>{issue.relatedActivityTitle}</span>}
                 </div>
                 <span className="section-linked-issue-status">
@@ -278,6 +291,11 @@ export function Dashboard({ data }: { data: DashboardData }) {
             >
               <Settings2 size={17} aria-hidden="true" />
             </Link>
+            <form action={logoutAction}>
+              <button className="button button-secondary dashboard-logout-button" type="submit" title="Log out" aria-label="Log out">
+                <LogOut size={17} aria-hidden="true" />
+              </button>
+            </form>
           </div>
         </header>
 

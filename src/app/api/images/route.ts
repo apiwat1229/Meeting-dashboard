@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { activities, dashboardSettings, issues, mediaAttachments, networkServiceStatuses } from "@/db/schema";
 import { deleteStoredMedia, ensureUploadDirectory, getMediaExtension, hasValidMediaSignature, isVideoExtension, mediaPath } from "@/lib/image-uploads";
+import { hasDashboardSession } from "@/lib/dashboard-auth";
 
 export const runtime = "nodejs";
 
@@ -44,6 +45,8 @@ async function ownerExists(owner: NonNullable<ReturnType<typeof parseOwner>>) {
 }
 
 export async function POST(request: Request) {
+  if (!(await hasDashboardSession())) return NextResponse.json({ message: "Authentication required." }, { status: 401 });
+
   const contentLength = Number(request.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength > maxVideoSize + 64 * 1024) {
     return badRequest("Choose a video smaller than 100 MB.", 413);
@@ -63,13 +66,14 @@ export async function POST(request: Request) {
   if (formData.get("remove") === "true" && typeof attachmentIdValue === "string") {
     const attachmentId = Number(attachmentIdValue);
     if (!Number.isSafeInteger(attachmentId) || attachmentId < 1) return badRequest("Choose a valid media attachment.");
-    const conditions = owner.entityType === "issue"
-      ? and(eq(mediaAttachments.id, attachmentId), eq(mediaAttachments.issueId, owner.entityId))
-      : owner.entityType === "activity"
-        ? and(eq(mediaAttachments.id, attachmentId), eq(mediaAttachments.activityId, owner.entityId))
-        : owner.entityType === "networkService"
-          ? and(eq(mediaAttachments.id, attachmentId), eq(mediaAttachments.networkServiceId, owner.entityId))
-          : and(eq(mediaAttachments.id, attachmentId), eq(mediaAttachments.dashboardSettingsId, owner.entityId));
+    const conditions = (() => {
+      switch (owner.entityType) {
+        case "issue": return and(eq(mediaAttachments.id, attachmentId), eq(mediaAttachments.issueId, owner.entityId));
+        case "activity": return and(eq(mediaAttachments.id, attachmentId), eq(mediaAttachments.activityId, owner.entityId));
+        case "networkService": return and(eq(mediaAttachments.id, attachmentId), eq(mediaAttachments.networkServiceId, owner.entityId));
+        case "cctv": return and(eq(mediaAttachments.id, attachmentId), eq(mediaAttachments.dashboardSettingsId, owner.entityId));
+      }
+    })();
     const [attachment] = await db.delete(mediaAttachments).where(conditions).returning({ url: mediaAttachments.url });
     if (!attachment) return badRequest("The media attachment could not be found.", 404);
     await deleteStoredMedia(attachment.url).catch(() => undefined);

@@ -7,6 +7,7 @@ import { X } from "lucide-react";
 import { saveCctvStatusAction, saveNetworkServerStatusAction } from "@/app/actions";
 import { MediaFilePicker, uploadMediaFiles } from "@/components/dashboard/media-file-picker";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ComboboxSelect } from "@/components/ui/combobox";
 import { ContextMenu } from "@/components/ui/context-menu";
@@ -14,6 +15,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } fr
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
+import { dashboardSectionNumbers } from "@/lib/dashboard-section-numbers";
 
 type ServiceStatus = "UNKNOWN" | "NORMAL" | "ABNORMAL";
 type NetworkService = {
@@ -118,11 +120,11 @@ function getCctvSummary(settings: CctvSettings) {
   }
   const workingCount = Math.max(0, settings.cameraCount - attentionCount);
   return {
-    value: workingCount,
+    value: settings.cameraCount,
     label: `${attentionCount} need attention`,
     detail,
     tone: workingCount === 0 ? "danger" as const : "warning" as const,
-    ariaLabel: `${workingCount} CCTV cameras working out of ${settings.cameraCount}, ${detail}`,
+    ariaLabel: `${settings.cameraCount} CCTV cameras total, ${workingCount} working, ${detail}`,
   };
 }
 
@@ -302,18 +304,47 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
   return (
     <>
       <Card className="summary-card summary-systems-card">
-        <ContextMenu as="div" role="button" className={`summary-breakdown-item summary-${networkSummary.tone} summary-systems-trigger`} ariaLabel={`${networkSummary.ariaLabel}. Click to configure.`} onActivate={editNetworkStatus} onEdit={editNetworkStatus}>
-          <strong className="summary-breakdown-title">Network &amp; Server</strong>
-          <strong>{networkSummary.value}</strong>
-          <span>{networkSummary.label}</span>
+        <ContextMenu as="div" role="button" className={`summary-breakdown-item summary-${networkSummary.tone} summary-systems-trigger`} ariaLabel={`${networkSummary.ariaLabel}. Click to configure.`} ariaExpanded={networkOpen} ariaHasPopup="dialog" onActivate={editNetworkStatus} onEdit={editNetworkStatus}>
+          <strong className="summary-breakdown-title">
+            {dashboardSectionNumbers.networkServer}. Network &amp; Server
+          </strong>
+          <span className={`system-health-label system-health-${networkSummary.tone}`}>{networkSummary.label}</span>
           {networkSummary.detail && <small>{networkSummary.detail}</small>}
+          <div className="network-service-summary" aria-label="Network and server service details">
+            {networkServices.length > 0 ? networkServices.map((service) => {
+              const statusVariant = service.status === "NORMAL" ? "success" : service.status === "ABNORMAL" ? "danger" : "neutral";
+              const statusLabel = service.status === "NORMAL" ? "Normal" : service.status === "ABNORMAL" ? "Abnormal" : "Not set";
+              const description = [service.reason, service.detail].filter(Boolean).join(" · ");
+
+              return (
+                <div className="network-service-summary-item" key={service.id}>
+                  <div className="network-service-summary-row">
+                    <span className="network-service-summary-name">{service.label}</span>
+                    <Badge variant={statusVariant} className="network-service-summary-status">
+                      {statusLabel}
+                    </Badge>
+                  </div>
+                  {service.status === "ABNORMAL" && description && (
+                    <small className="network-service-summary-note">{description}</small>
+                  )}
+                </div>
+              );
+            }) : (
+              <span className="network-service-summary-empty">No services configured</span>
+            )}
+          </div>
         </ContextMenu>
       </Card>
       <Card className="summary-card summary-systems-card">
-        <ContextMenu as="div" role="button" className={`summary-breakdown-item summary-${cctvSummary.tone} summary-systems-trigger`} ariaLabel={`${cctvSummary.ariaLabel}. Click to configure.`} onActivate={editCctvStatus} onEdit={editCctvStatus}>
-          <strong className="summary-breakdown-title">CCTV</strong>
-          <strong>{cctvSummary.value}</strong>
-          <span>{cctvSummary.label}</span>
+        <ContextMenu as="div" role="button" className={`summary-breakdown-item summary-${cctvSummary.tone} summary-systems-trigger`} ariaLabel={`${cctvSummary.ariaLabel}. Click to configure.`} ariaExpanded={cctvOpen} ariaHasPopup="dialog" onActivate={editCctvStatus} onEdit={editCctvStatus}>
+          <strong className="summary-breakdown-title">
+            {dashboardSectionNumbers.cctv}. CCTV
+          </strong>
+          <span className={`cctv-status-label cctv-status-${cctvSummary.tone}`}>{cctvSummary.label}</span>
+          <strong className="cctv-camera-count">
+            <span className="cctv-camera-count-value">{cctvSummary.value}</span>
+            <span className="cctv-camera-count-unit">cameras</span>
+          </strong>
           {cctvSummary.detail && <small>{cctvSummary.detail}</small>}
         </ContextMenu>
       </Card>

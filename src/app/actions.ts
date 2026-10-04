@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { requireAuthenticatedSession } from "@/lib/dashboard-auth";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -111,6 +112,7 @@ const invalidFormResult: MutationResult = {
 };
 
 export async function saveDashboardFocusAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const parsed = z.object({
     focusTitle: z.string().trim().min(1).max(140),
     focusDetail: z.string().trim().max(500),
@@ -148,6 +150,7 @@ export async function saveDashboardFocusAction(formData: FormData): Promise<Muta
 }
 
 export async function clearDashboardFocusAction(): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   return runMutation("Today’s Focus cleared.", "Could not clear Today’s Focus.", () => db
     .insert(dashboardSettings)
     .values({
@@ -167,6 +170,7 @@ export async function clearDashboardFocusAction(): Promise<MutationResult> {
 }
 
 export async function saveDashboardFocusProjectsAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const rawProjectIds = formData.get("projectIds");
   const rawTaskIds = formData.get("taskIds");
   if (typeof rawProjectIds !== "string" || typeof rawTaskIds !== "string") return invalidFormResult;
@@ -226,6 +230,7 @@ export async function saveDashboardFocusProjectsAction(formData: FormData): Prom
 }
 
 export async function saveNetworkServerStatusAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const rawServices = formData.get("services");
   if (typeof rawServices !== "string") return invalidFormResult;
 
@@ -264,6 +269,7 @@ export async function saveNetworkServerStatusAction(formData: FormData): Promise
 }
 
 export async function saveCctvStatusAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const parsed = z.object({
     cameraCount: z.coerce.number().int().min(0).max(100000),
     cameraFaultyCount: z.coerce.number().int().min(0).max(100000),
@@ -325,6 +331,7 @@ export async function saveThemeAction(
   _previousState: { ok: boolean; message: string },
   formData: FormData,
 ): Promise<{ ok: boolean; message: string }> {
+  await requireAuthenticatedSession();
   const rawConfig = formData.get("theme");
   if (typeof rawConfig !== "string") {
     return { ok: false, message: "ไม่พบค่าธีมที่ต้องการบันทึก" };
@@ -355,6 +362,7 @@ export async function saveThemeAction(
 }
 
 export async function createProjectAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const parsed = z
     .object({
       name: z.string().trim().min(2).max(140),
@@ -388,6 +396,7 @@ export async function createProjectAction(formData: FormData): Promise<MutationR
 }
 
 export async function updateProjectAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const parsed = z
     .object({
       id: z.coerce.number().int().positive(),
@@ -422,6 +431,7 @@ export async function updateProjectAction(formData: FormData): Promise<MutationR
 }
 
 export async function updateProjectScheduleAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const parsed = z
     .object({
       id: z.coerce.number().int().positive(),
@@ -446,6 +456,7 @@ export async function updateProjectScheduleAction(formData: FormData): Promise<M
 }
 
 export async function updateProjectDailyAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const rawTaskIds = formData.get("taskIds");
   if (typeof rawTaskIds !== "string") return invalidFormResult;
 
@@ -489,6 +500,7 @@ export async function getProjectChangeHistoryAction(projectId: number): Promise<
   message?: string;
   entries: Array<{ id: number; field: string; oldValue: string | null; newValue: string | null; changedAt: string }>;
 }> {
+  await requireAuthenticatedSession();
   const parsed = z.number().int().positive().safeParse(projectId);
   if (!parsed.success) return { ok: false, message: "Invalid project.", entries: [] };
 
@@ -523,6 +535,7 @@ export async function getProjectChangeHistoryAction(projectId: number): Promise<
 }
 
 export async function deleteProjectAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const parsed = z.object({ id: z.coerce.number().int().positive() }).safeParse({ id: formData.get("id") });
 
   if (!parsed.success) return invalidFormResult;
@@ -532,6 +545,7 @@ export async function deleteProjectAction(formData: FormData): Promise<MutationR
 }
 
 export async function createProjectTaskAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const parsed = z
     .object({
       projectId: z.coerce.number().int().positive(),
@@ -559,6 +573,7 @@ export async function createProjectTaskAction(formData: FormData): Promise<Mutat
 }
 
 export async function updateProjectTaskAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const parsed = z
     .object({
       id: z.coerce.number().int().positive(),
@@ -591,6 +606,7 @@ export async function updateProjectTaskAction(formData: FormData): Promise<Mutat
 }
 
 export async function deleteProjectTaskAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const parsed = z
     .object({
       id: z.coerce.number().int().positive(),
@@ -605,6 +621,7 @@ export async function deleteProjectTaskAction(formData: FormData): Promise<Mutat
 }
 
 export async function createIssueAction(formData: FormData): Promise<MutationResult & { issueId?: number }> {
+  await requireAuthenticatedSession();
   const projectValue = formData.get("projectId");
   const relatedSectionValue = formData.get("relatedSection");
   const relatedActivityValue = formData.get("relatedActivityId");
@@ -650,6 +667,7 @@ export async function createIssueAction(formData: FormData): Promise<MutationRes
 }
 
 export async function updateIssueAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const projectValue = formData.get("projectId");
   const relatedSectionValue = formData.get("relatedSection");
   const relatedActivityValue = formData.get("relatedActivityId");
@@ -694,6 +712,7 @@ export async function updateIssueAction(formData: FormData): Promise<MutationRes
 }
 
 export async function deleteIssueAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const parsed = z.object({ id: z.coerce.number().int().positive() }).safeParse({ id: formData.get("id") });
 
   if (!parsed.success) return invalidFormResult;
@@ -709,6 +728,7 @@ export async function deleteIssueAction(formData: FormData): Promise<MutationRes
 }
 
 export async function createActivityAction(formData: FormData): Promise<MutationResult & { activityId?: number }> {
+  await requireAuthenticatedSession();
   const parsed = z
     .object({
       section: activitySectionSchema,
@@ -735,6 +755,7 @@ export async function createActivityAction(formData: FormData): Promise<Mutation
 }
 
 export async function updateActivityAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const parsed = z
     .object({
       id: z.coerce.number().int().positive(),
@@ -766,6 +787,7 @@ export async function updateActivityAction(formData: FormData): Promise<Mutation
 }
 
 export async function deleteActivityAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const parsed = z.object({ id: z.coerce.number().int().positive() }).safeParse({ id: formData.get("id") });
 
   if (!parsed.success) return invalidFormResult;
@@ -781,6 +803,7 @@ export async function deleteActivityAction(formData: FormData): Promise<Mutation
 }
 
 export async function toggleActivityAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
   const parsed = z
     .object({ id: z.coerce.number().int().positive(), completed: z.enum(["true", "false"]) })
     .safeParse({ id: formData.get("id"), completed: formData.get("completed") });

@@ -356,6 +356,17 @@ p {
   opacity: 0.78;
 }
 
+.report-meta form {
+  display: flex;
+}
+
+.dashboard-logout-button {
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+}
+
 .dashboard-content {
   display: grid;
   gap: var(--layout-gap);
@@ -457,10 +468,74 @@ p {
 }
 
 .summary-systems-card .summary-breakdown-item .summary-breakdown-title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: var(--color-navy);
   font-family: var(--type-h2-family);
   font-size: var(--type-h2-size);
   font-weight: var(--type-h2-weight);
   line-height: var(--type-h2-line-height);
+}
+
+.summary-systems-card .system-health-label {
+  font-weight: 700;
+}
+
+.summary-systems-card .system-health-success {
+  color: var(--color-success) !important;
+}
+
+.summary-systems-card .system-health-warning {
+  color: var(--color-warning) !important;
+}
+
+.summary-systems-card .system-health-danger {
+  color: var(--color-danger) !important;
+}
+
+.summary-systems-card .system-health-neutral {
+  color: var(--color-muted) !important;
+}
+
+.summary-systems-card .cctv-status-label {
+  font-weight: 700;
+}
+
+.summary-systems-card .cctv-status-success {
+  color: var(--color-success) !important;
+}
+
+.summary-systems-card .cctv-status-warning {
+  color: var(--color-warning) !important;
+}
+
+.summary-systems-card .cctv-status-danger {
+  color: var(--color-danger) !important;
+}
+
+.summary-systems-card .cctv-status-neutral {
+  color: var(--color-muted) !important;
+}
+
+.summary-systems-card .cctv-camera-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--color-navy);
+}
+
+.summary-systems-card .cctv-camera-count-value {
+  color: inherit !important;
+  font-size: clamp(22px, 8.4cqi, 30px) !important;
+  font-weight: 700;
+}
+
+.summary-systems-card .cctv-camera-count-unit {
+  color: var(--color-muted) !important;
+  font-size: 13px !important;
+  font-weight: 600;
 }
 
 .summary-systems-trigger {
@@ -480,9 +555,93 @@ p {
   background: transparent;
 }
 
+.summary-systems-trigger:hover .summary-breakdown-title {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .summary-systems-trigger:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+.network-service-summary {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  padding-top: 0;
+  margin-top: 2px;
+}
+
+.network-service-summary-item {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.network-service-summary-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.network-service-summary-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-ink) !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-systems-card .network-service-summary-status {
+  min-height: 0;
+  min-width: 0;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px !important;
+  white-space: nowrap;
+}
+
+.summary-systems-card .network-service-summary-status.status-success {
+  color: var(--color-success) !important;
+  background: var(--color-success-soft) !important;
+}
+
+.summary-systems-card .network-service-summary-status.status-danger {
+  color: var(--color-danger) !important;
+  background: var(--color-danger-soft) !important;
+}
+
+.summary-systems-card .network-service-summary-status.status-neutral {
+  color: var(--color-muted) !important;
+  background: var(--color-panel-alt) !important;
+}
+
+.summary-systems-card .network-service-summary-status .status-dot {
+  display: none;
+}
+
+.network-service-summary-note {
+  color: var(--color-muted) !important;
+  font-size: 11px !important;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.network-service-summary-empty {
+  font-size: 11px !important;
+  text-align: center;
 }
 
 .summary-systems-card .summary-breakdown-item small {
@@ -509,12 +668,6 @@ p {
   margin: 0;
 }
 
-.today-focus-title-trigger svg {
-  flex: 0 0 auto;
-  color: var(--color-muted);
-  transition: transform 140ms ease;
-}
-
 .today-focus-title-trigger:hover h2 {
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -523,10 +676,6 @@ p {
 .today-focus-title-trigger:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 3px;
-}
-
-.today-focus-title-trigger[aria-expanded="true"] svg {
-  transform: rotate(180deg);
 }
 
 .main-grid {
@@ -539,6 +688,7 @@ p {
 .main-grid > .content-card,
 .activity-grid > .content-card {
   min-width: 0;
+  min-height: 0;
 }
 
 .content-card {
@@ -575,7 +725,7 @@ p {
 .project-row {
   min-width: 790px;
   display: grid;
-  grid-template-columns: 32px minmax(170px, 1.35fr) minmax(155px, 1.25fr) minmax(155px, 1.25fr) minmax(145px, 0.95fr) minmax(78px, 0.45fr);
+  grid-template-columns: minmax(170px, 1.35fr) minmax(155px, 1.25fr) minmax(155px, 1.25fr) minmax(145px, 0.95fr) minmax(78px, 0.45fr);
   align-items: center;
   column-gap: 11px;
 }
@@ -584,7 +734,7 @@ p {
   min-height: 34px;
   padding: 0 9px;
   color: #000;
-  font-size: 13px;
+  font-size: calc(var(--type-caption-size) + 3px);
   font-weight: 700;
 }
 
@@ -619,18 +769,24 @@ p {
 
 .project-status-summary .summary-breakdown {
   grid-template-columns: repeat(3, max-content);
+  align-items: center;
+  gap: 6px;
 }
 
 .project-status-summary .summary-breakdown-item {
   flex-direction: row;
   justify-content: center;
   gap: 7px;
+  padding: 4px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-panel);
   white-space: nowrap;
 }
 
 .project-status-summary .summary-breakdown-item + .summary-breakdown-item {
   border-left: 0;
-  padding-left: clamp(8px, 1cqi, 14px);
+  padding-left: 9px;
 }
 
 .project-status-summary .summary-breakdown-item strong {
@@ -688,7 +844,7 @@ p {
 .project-empty-row {
   min-width: 790px;
   display: grid;
-  grid-template-columns: 32px minmax(170px, 1.35fr) minmax(155px, 1.25fr) minmax(155px, 1.25fr) minmax(145px, 0.95fr) minmax(78px, 0.45fr);
+  grid-template-columns: minmax(170px, 1.35fr) minmax(155px, 1.25fr) minmax(155px, 1.25fr) minmax(145px, 0.95fr) minmax(78px, 0.45fr);
   border-radius: 4px;
 }
 
@@ -697,6 +853,10 @@ p {
 }
 
 .project-name {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
   font-weight: 700;
   font-size: 18px;
   line-height: 1.35;
@@ -707,7 +867,16 @@ p {
   font-size: 18px;
   line-height: 1.35;
   font-weight: 700;
-  text-align: center;
+  flex: 0 0 auto;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.project-name-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .project-work {
@@ -867,7 +1036,7 @@ p {
 }
 
 .crud-popover {
-  width: min(340px, calc(100vw - 32px));
+  width: min(440px, calc(100vw - 32px));
   max-height: min(82dvh, 760px, var(--available-height, 82dvh));
   max-width: calc(100vw - 24px);
   display: grid;
@@ -2966,6 +3135,10 @@ p {
   gap: 10px;
 }
 
+.date-field-pair {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .issue-card {
   padding-inline: 18px;
 }
@@ -3018,22 +3191,14 @@ p {
   background: var(--color-success);
 }
 
-.project-heading .icon-button,
-.issue-heading .icon-button,
-.activity-heading .icon-button {
+.issue-heading .icon-button {
   border-color: transparent;
   background: transparent;
 }
 
-.issue-heading .icon-button:hover,
-.activity-heading .icon-button:hover {
+.issue-heading .icon-button:hover {
   border-color: transparent;
   background: var(--color-info-soft);
-}
-
-.project-heading .icon-button {
-  border: 0;
-  background: transparent;
 }
 
 .issue-list {
@@ -3180,12 +3345,12 @@ p {
 .activity-grid {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
-  align-items: stretch;
+  align-items: start;
   gap: var(--layout-gap);
 }
 
 .activity-card {
-  min-height: 178px;
+  min-height: 0;
   padding: 16px 18px 18px;
   background: var(--color-panel-alt);
 }
@@ -3369,7 +3534,7 @@ p {
 }
 
 .activity-number {
-  flex: 0 0 22px;
+  flex: 0 0 27px;
   color: var(--color-ink);
   font-size: 16px;
   font-weight: 700;
@@ -3831,7 +3996,7 @@ p {
 
   .project-header,
   .project-row {
-    grid-template-columns: 28px minmax(130px, 1.2fr) minmax(120px, 1.15fr) minmax(120px, 1.15fr) minmax(130px, 0.9fr) minmax(74px, 0.45fr);
+    grid-template-columns: minmax(130px, 1.2fr) minmax(120px, 1.15fr) minmax(120px, 1.15fr) minmax(130px, 0.9fr) minmax(74px, 0.45fr);
     column-gap: 7px;
   }
 
@@ -3931,11 +4096,6 @@ p {
     flex: 1 1 auto;
   }
 
-  .project-heading > .icon-button {
-    order: 2;
-    margin-left: auto;
-  }
-
   .project-status-summary {
     order: 3;
     flex: 1 1 100%;
@@ -3970,7 +4130,7 @@ p {
   .project-header,
   .project-row {
     min-width: 840px;
-    grid-template-columns: 30px 175px 155px 155px 175px 80px;
+    grid-template-columns: 175px 155px 155px 175px 80px;
   }
 
   .issue-item {
@@ -4075,5 +4235,211 @@ p {
   *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Slightly larger dashboard content typography, scoped below the top bar. */
+.dashboard-content {
+  --type-h2-size: 20px;
+  --type-h3-size: 16px;
+  --type-body-size: 15px;
+  --type-caption-size: 13px;
+  --type-metric-size: 25px;
+  font-size: var(--type-body-size);
+}
+
+.dashboard-content .section-heading h2 {
+  font-size: var(--type-h2-size);
+}
+
+.dashboard-content .project-header {
+  font-size: calc(var(--type-caption-size) + 3px);
+}
+
+.dashboard-content .project-name,
+.dashboard-content .project-index,
+.dashboard-content .project-work,
+.dashboard-content .project-schedule-range {
+  font-size: 19px;
+}
+
+.dashboard-content .project-progress-indicator {
+  font-size: 17px;
+}
+
+.dashboard-content .project-legend {
+  font-size: 17px;
+}
+
+.dashboard-content .project-status-summary .summary-breakdown-item strong {
+  font-size: clamp(25px, 2.5cqi, 31px);
+}
+
+.dashboard-content .today-focus-project-heading h3 {
+  font-size: calc(var(--type-h3-size) + 2px);
+}
+
+.dashboard-content .today-focus-subtask {
+  font-size: calc(var(--type-body-size) + 1px);
+}
+
+.dashboard-content .today-focus-no-subtasks,
+.dashboard-content .ui-empty-description {
+  font-size: 13px;
+}
+
+.dashboard-content .ui-empty-title {
+  font-size: 14px;
+}
+
+.dashboard-content .activity-list li > .activity-content {
+  font-size: 19px;
+}
+
+.dashboard-content .activity-number {
+  font-size: 17px;
+}
+
+.dashboard-content .activity-carryover-tag {
+  font-size: 14px;
+}
+
+.dashboard-content .section-linked-issues > h3,
+.dashboard-content .section-linked-issue > div > strong {
+  font-size: 14px;
+}
+
+.dashboard-content .section-linked-issue > div > span,
+.dashboard-content .section-linked-issue-status {
+  font-size: 12px;
+}
+
+.dashboard-content .summary-systems-card .summary-breakdown-item .summary-breakdown-title {
+  font-size: var(--type-h2-size);
+}
+
+.dashboard-content .summary-systems-card .summary-breakdown-item > span {
+  font-size: clamp(14px, 4.8cqi, 17px);
+}
+
+.dashboard-content .summary-systems-card .cctv-camera-count-value {
+  font-size: clamp(24px, 8.8cqi, 32px) !important;
+}
+
+.dashboard-content .summary-systems-card .cctv-camera-count-unit {
+  font-size: 14px !important;
+}
+
+.dashboard-content .network-service-summary-name {
+  font-size: 13px !important;
+}
+
+.dashboard-content .summary-systems-card .network-service-summary-status {
+  font-size: 12px !important;
+}
+
+.dashboard-content .network-service-summary-note,
+.dashboard-content .network-service-summary-empty {
+  font-size: 12px !important;
+}
+
+.login-page {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at 15% 10%, color-mix(in srgb, var(--color-primary) 11%, transparent), transparent 42%),
+    var(--color-canvas);
+}
+
+.login-panel {
+  width: min(100%, 440px);
+  padding: clamp(26px, 5vw, 40px);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-panel);
+  box-shadow: 0 18px 55px rgb(17 39 71 / 10%);
+}
+
+.login-eyebrow {
+  margin: 0 0 10px;
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.login-panel h1 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 26px;
+  line-height: 1.35;
+}
+
+.login-description {
+  margin: 8px 0 26px;
+  color: var(--color-muted);
+  font-size: 15px;
+}
+
+.login-form {
+  display: grid;
+  gap: 9px;
+}
+
+.login-form label {
+  margin-top: 8px;
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.login-form input {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-ink);
+  background: var(--color-panel);
+  outline: none;
+}
+
+.login-form input:focus-visible {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+.login-error {
+  margin: 5px 0 0;
+  color: var(--color-danger);
+  font-size: 14px;
+}
+
+.login-submit {
+  min-height: 46px;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--color-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.login-submit:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
+
+.login-submit:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+@media (max-width: 600px) {
+  .login-panel h1 {
+    font-size: 22px;
   }
 }

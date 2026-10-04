@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 import { createActivityAction, deleteActivityAction, updateActivityAction } from "@/app/actions";
 import { ConfirmActionDialog } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,6 @@ import { ComboboxSelect } from "@/components/ui/combobox";
 import { ContextMenu } from "@/components/ui/context-menu";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "@/components/ui/toast";
 import { ActivityDetailsDialog, ImageAttachment } from "@/components/dashboard/detail-dialogs";
 import { MediaFilePicker, uploadMediaFiles } from "@/components/dashboard/media-file-picker";
@@ -38,7 +37,7 @@ const activitySectionLabels: Record<ActivitySection, string> = {
   YESTERDAY: "Yesterday Activities",
 };
 
-export function AddActivityMenu({ section }: { section: ActivitySection }) {
+export function AddActivityMenu({ section, children }: { section: ActivitySection; children: ReactNode }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState("");
@@ -96,14 +95,15 @@ export function AddActivityMenu({ section }: { section: ActivitySection }) {
 
   return (
     <>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger className="icon-button" aria-label="Add activity" onClick={openAddForm}>
-            <Plus size={18} />
-          </TooltipTrigger>
-          <TooltipContent>Add activity</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <button
+        type="button"
+        className="today-focus-title-trigger"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={openAddForm}
+      >
+        {children}
+      </button>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="detail-dialog-content activity-edit-dialog">
           <div className="detail-dialog-header">

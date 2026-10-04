@@ -16,7 +16,7 @@ docker compose -f compose.dev.yaml up --build
 
 ## เตรียม deploy บน Docker Server
 
-1. คัดลอก `.env.production.example` เป็น `.env.production` แล้วตั้งรหัสผ่าน PostgreSQL ที่เดายาก โดยให้ค่าใน `DATABASE_URL` ตรงกับ `POSTGRES_USER`, `POSTGRES_PASSWORD` และ `POSTGRES_DB`
+1. คัดลอก `.env.production.example` เป็น `.env.production` แล้วตั้งรหัสผ่าน PostgreSQL ที่เดายาก โดยให้ค่าใน `DATABASE_URL` ตรงกับ `POSTGRES_USER`, `POSTGRES_PASSWORD` และ `POSTGRES_DB` ตั้ง `DASHBOARD_USERNAME`, `DASHBOARD_PASSWORD` และ `DASHBOARD_SESSION_SECRET` ด้วย โดยรหัส Dashboard ต้องแยกจากรหัสเซิร์ฟเวอร์ และ session secret ควรสุ่มอย่างน้อย 32 ตัวอักษร
 2. ส่ง source code ไปยัง Docker Server แล้วรัน:
 
 ```sh
@@ -31,7 +31,7 @@ Compose จะ build production image, รอ PostgreSQL พร้อมใช�
 docker compose --env-file .env.production exec -T db pg_dump -U it_dashboard -d it_dashboard > backup.sql
 ```
 
-ก่อนเปิดให้ใช้งานนอกเครือข่ายที่เชื่อถือได้ ควรเพิ่มระบบเข้าสู่ระบบและสิทธิ์ผู้ใช้ โปรเจกต์เริ่มต้นนี้ยังไม่มี authentication และผู้ที่เข้าถึงหน้า Dashboard ได้สามารถเพิ่มหรือแก้ข้อมูลได้
+ระบบจะบังคับเข้าสู่ระบบก่อนดู Dashboard และตรวจสิทธิ์ซ้ำใน Server Actions และ Route Handlers ด้วย Session cookie มีอายุ 12 ชั่วโมง และใช้ `HttpOnly`, `SameSite=Lax` และ `Secure` เมื่อเปิดผ่าน HTTPS หากตั้ง `DASHBOARD_COOKIE_SECURE=false` จะอนุญาตคุกกี้ผ่าน HTTP ซึ่งควรใช้เฉพาะ staging ที่จำกัดอยู่บน loopback เท่านั้น
 
 ## โครงสร้างโปรเจกต์
 

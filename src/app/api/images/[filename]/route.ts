@@ -3,10 +3,13 @@ import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
 import { isStoredMediaName, mediaMimeByExtension, mediaPath, type MediaExtension } from "@/lib/image-uploads";
+import { hasDashboardSession } from "@/lib/dashboard-auth";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request, { params }: { params: Promise<{ filename: string }> }) {
+  if (!(await hasDashboardSession())) return NextResponse.json({ message: "Authentication required." }, { status: 401 });
+
   const { filename } = await params;
   if (!isStoredMediaName(filename)) {
     return NextResponse.json({ message: "Media not found." }, { status: 404 });
@@ -45,7 +48,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
       "Content-Type": mediaMimeByExtension[extension],
       "Content-Length": String(end - start + 1),
       "Accept-Ranges": "bytes",
-      "Cache-Control": "public, max-age=31536000, immutable",
+      "Cache-Control": "private, no-store",
       "Content-Disposition": `inline; filename="${filename}"`,
       "X-Content-Type-Options": "nosniff",
     });

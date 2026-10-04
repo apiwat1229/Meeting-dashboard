@@ -1,7 +1,7 @@
 "use client";
 
 import { createElement, type KeyboardEvent, type ReactNode } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu";
 
 type ContextMenuProps = {
@@ -9,17 +9,23 @@ type ContextMenuProps = {
   className: string;
   role?: "button" | "group" | "row" | "listitem";
   ariaLabel: string;
+  ariaExpanded?: boolean;
+  ariaHasPopup?: "dialog" | "menu";
   children: ReactNode;
   onEdit: () => void;
   onDelete?: () => void;
   onActivate?: () => void;
+  onCreate?: () => void;
+  createLabel?: string;
 };
 
-export function ContextMenu({ as, className, role, ariaLabel, children, onEdit, onDelete, onActivate }: ContextMenuProps) {
+export function ContextMenu({ as, className, role, ariaLabel, ariaExpanded, ariaHasPopup, children, onEdit, onDelete, onActivate, onCreate, createLabel = "Create new" }: ContextMenuProps) {
   const trigger = createElement(as, {
     className,
     role,
     "aria-label": ariaLabel,
+    "aria-expanded": ariaExpanded,
+    "aria-haspopup": ariaHasPopup,
     tabIndex: 0,
     onClick: onActivate,
     onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
@@ -35,6 +41,12 @@ export function ContextMenu({ as, className, role, ariaLabel, children, onEdit, 
       <ContextMenuPrimitive.Portal>
         <ContextMenuPrimitive.Positioner className="context-menu-positioner">
           <ContextMenuPrimitive.Popup className="context-menu-popup">
+            {onCreate && (
+              <ContextMenuPrimitive.Item className="context-menu-item" onClick={onCreate}>
+                <Plus size={14} aria-hidden="true" />
+                {createLabel}
+              </ContextMenuPrimitive.Item>
+            )}
             <ContextMenuPrimitive.Item className="context-menu-item" onClick={onEdit}>
               <Pencil size={14} aria-hidden="true" />
               Edit

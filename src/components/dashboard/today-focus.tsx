@@ -2,8 +2,9 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, FolderKanban, X } from "lucide-react";
+import { FolderKanban, X } from "lucide-react";
 import { saveDashboardFocusProjectsAction } from "@/app/actions";
+import { dashboardSectionNumbers } from "@/lib/dashboard-section-numbers";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -94,23 +95,22 @@ export function TodayFocus({ projects, selectedProjectIds, selectedTaskIds }: { 
             aria-haspopup="dialog"
             aria-expanded={open}
           >
-            <h2 className="type-h2" id="today-focus-projects-title">Today’s Focus</h2>
-            <ChevronDown size={17} aria-hidden="true" />
+            <h2 className="type-h2" id="today-focus-projects-title">{dashboardSectionNumbers.todayFocus}. Today’s Focus</h2>
           </button>
         </div>
       </div>
       {selectedProjects.length > 0 ? (
         <div className="today-focus-project-groups">
-          {selectedProjects.map((project) => (
+          {selectedProjects.map((project, projectIndex) => (
             <article className="today-focus-project-group" key={project.id}>
               <div className="today-focus-project-heading">
-                <h3>{project.name}</h3>
+                <h3>{dashboardSectionNumbers.todayFocus}.{projectIndex + 1} {project.name}</h3>
               </div>
               {project.tasks.length > 0 ? (
                 <ul className="today-focus-subtask-list">
                   {project.tasks.filter((task) => selectedTaskIds.includes(task.id)).map((task) => (
                     <li className={`today-focus-subtask today-focus-subtask-${task.status.toLowerCase()}`} key={task.id}>
-                      <span>{task.title}</span>
+                      <span>- {task.title}</span>
                     </li>
                   ))}
                 </ul>
