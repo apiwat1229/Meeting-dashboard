@@ -788,14 +788,13 @@ p {
   justify-content: center;
   gap: 7px;
   padding: 4px 9px;
-  border: 1px solid var(--color-border);
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, var(--color-ink));
   border-radius: 8px;
   background: var(--color-panel);
   white-space: nowrap;
 }
 
 .project-status-summary .summary-breakdown-item + .summary-breakdown-item {
-  border-left: 0;
   padding-left: 9px;
 }
 
@@ -4343,7 +4342,7 @@ p {
 
 .dashboard-content .project-name,
 .dashboard-content .project-index {
-  font-size: 19px;
+  font-size: 18px;
 }
 
 .dashboard-content .project-work,
