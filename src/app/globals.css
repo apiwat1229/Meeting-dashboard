@@ -993,6 +993,27 @@ p {
   stroke-width: 1.75;
 }
 
+.project-schedule-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.project-schedule-heading > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.project-schedule-heading-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  color: var(--color-primary);
+  stroke-width: 1.75;
+}
+
 .project-schedule-range time {
   white-space: nowrap;
 }

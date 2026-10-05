@@ -154,7 +154,13 @@ function ProjectSection({ data }: { data: DashboardData }) {
                 <th scope="col">Project Name</th>
                 <th scope="col">Yesterday Task</th>
                 <th scope="col">Today Task</th>
-                <th scope="col">Start / Finish</th>
+                <th scope="col">
+                  <span className="project-schedule-heading">
+                    <span><CirclePlay className="project-schedule-heading-icon" aria-hidden="true" /> Start</span>
+                    <span aria-hidden="true">/</span>
+                    <span><Flag className="project-schedule-heading-icon" aria-hidden="true" /> Finish</span>
+                  </span>
+                </th>
                 <th scope="col">Progress</th>
               </tr>
             </thead>
@@ -236,7 +242,7 @@ function ActivitySection({
             {(activity.isCarryover || activity.willCarryOver) && (
               <span className={`activity-carryover-tag ${activity.willCarryOver ? "activity-carryover-pending" : "activity-carryover-today"}`}>
                 <ArrowLeft size={16} aria-hidden="true" />
-                {activity.willCarryOver ? "Continued today" : "From yesterday"}
+                {activity.willCarryOver ? "Continued" : "From yesterday"}
               </span>
             )}
           </ActivityEditor>
