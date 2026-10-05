@@ -113,7 +113,14 @@ export function ProjectDailyUpdatePicker({
         renderValue={(_selectedValues, labels) => {
           const lines = labels.length > 0 ? labels : !open ? fallbackTitles : [];
           return lines.length > 0 ? (
-            <span className="project-daily-update-picker-text">{lines.map((label) => `- ${label}`).join("\n")}</span>
+            <span className="project-daily-update-picker-text">
+              {lines.map((label, lineIndex) => (
+                <span className="project-daily-update-picker-line" key={`${lineIndex}-${label}`}>
+                  <span aria-hidden="true">-</span>
+                  <span className="project-daily-update-picker-label">{label}</span>
+                </span>
+              ))}
+            </span>
           ) : (
             <span className="project-daily-update-picker-placeholder">{tasks.length > 0 ? "Choose subtasks" : "No update recorded."}</span>
           );

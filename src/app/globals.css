@@ -881,9 +881,8 @@ p {
 
 .project-name-label {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .project-work {
@@ -939,6 +938,24 @@ p {
   white-space: pre-line;
 }
 
+.project-daily-update-picker-text {
+  display: grid;
+  white-space: normal;
+}
+
+.project-daily-update-picker-line {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 0.78em minmax(0, 1fr);
+  align-items: start;
+}
+
+.project-daily-update-picker-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
 .project-daily-update-picker-placeholder {
   color: var(--color-muted);
   font-size: 13px;
@@ -951,11 +968,16 @@ p {
 
 .project-schedule-range {
   min-width: 0;
-  overflow: hidden;
+  display: grid;
+  gap: 1px;
   color: #000;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
-  text-overflow: ellipsis;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.project-schedule-range time {
   white-space: nowrap;
 }
 
@@ -4345,9 +4367,12 @@ p {
   font-size: 18px;
 }
 
-.dashboard-content .project-work,
-.dashboard-content .project-schedule-range {
+.dashboard-content .project-work {
   font-size: 18px;
+}
+
+.dashboard-content .project-schedule-range {
+  font-size: 15px;
 }
 
 .dashboard-content .project-progress-indicator {
