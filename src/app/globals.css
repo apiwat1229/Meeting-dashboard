@@ -714,31 +714,41 @@ p {
   color: var(--color-muted);
 }
 
-.project-table {
+.project-table-scroll {
   width: 100%;
   min-width: 0;
   overflow-x: auto;
   overscroll-behavior-x: contain;
 }
 
-.project-header,
-.project-row {
+.project-table {
+  width: 100%;
   min-width: 790px;
-  display: grid;
-  grid-template-columns: minmax(170px, 1.35fr) minmax(155px, 1.25fr) minmax(155px, 1.25fr) minmax(145px, 0.95fr) minmax(78px, 0.45fr);
-  align-items: center;
-  column-gap: 11px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .project-header {
-  min-height: 34px;
-  padding: 0 9px;
   color: #000;
   font-size: calc(var(--type-caption-size) + 3px);
   font-weight: 700;
 }
 
-.project-header > [role="columnheader"]:last-child {
+.project-table th:nth-child(1) { width: 24%; }
+.project-table th:nth-child(2) { width: 23%; }
+.project-table th:nth-child(3) { width: 23%; }
+.project-table th:nth-child(4) { width: 19%; }
+.project-table th:nth-child(5) { width: 11%; }
+
+.project-header th {
+  padding: 3px 9px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 78%, var(--color-panel));
+  text-align: left;
+  line-height: 1.25;
+}
+
+.project-header th:last-child {
   text-align: center;
 }
 
@@ -834,22 +844,20 @@ p {
 }
 
 .project-row {
-  min-height: 36px;
-  position: relative;
-  padding: 0 9px;
-  border-radius: 4px;
   cursor: pointer;
 }
 
-.project-empty-row {
-  min-width: 790px;
-  display: grid;
-  grid-template-columns: minmax(170px, 1.35fr) minmax(155px, 1.25fr) minmax(155px, 1.25fr) minmax(145px, 0.95fr) minmax(78px, 0.45fr);
-  border-radius: 4px;
+.project-row > td {
+  padding: 6px 9px;
+  vertical-align: middle;
 }
 
-.project-empty-row > [role="cell"] {
-  grid-column: 1 / -1;
+.project-body > .project-row:not(:last-child) > td {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 78%, var(--color-panel));
+}
+
+.project-empty-row > td {
+  padding: 12px 9px;
 }
 
 .project-name {
@@ -886,6 +894,60 @@ p {
   color: #000;
   font-size: 18px;
   line-height: 1.35;
+}
+
+.project-daily-update-picker {
+  min-width: 0;
+}
+
+.dashboard-content .project-daily-update-picker {
+  color: #000;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.project-daily-update-picker .project-daily-update-picker-trigger {
+  width: 100%;
+  min-height: 0;
+  height: auto;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  white-space: pre-line;
+}
+
+.project-daily-update-picker .project-daily-update-picker-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 60%, transparent);
+  outline-offset: 3px;
+}
+
+.project-daily-update-picker .shadcn-combobox-trigger-icon {
+  display: none;
+}
+
+.project-daily-update-picker-text,
+.project-daily-update-picker-placeholder {
+  min-width: 0;
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.project-daily-update-picker-placeholder {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.project-daily-update-picker-footer > div {
+  display: flex;
+  gap: 6px;
 }
 
 .project-schedule-range {
@@ -1608,7 +1670,7 @@ p {
 }
 
 .network-service-card + .network-service-card {
-  border-top: 1px solid var(--color-border);
+  border-top: 0;
 }
 
 .network-service-card-abnormal {
@@ -1904,7 +1966,7 @@ p {
 .today-focus-subtask-list {
   display: grid;
   gap: 4px;
-  padding-inline-start: 1.25em;
+  padding-inline-start: 0;
   margin: 0;
   list-style: none;
 }
@@ -1920,10 +1982,9 @@ p {
 
 .today-focus-subtask > span:first-child {
   min-width: 0;
-  overflow: hidden;
+  overflow-wrap: anywhere;
   color: var(--color-ink);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .today-focus-subtask-done > span:first-child {
@@ -1933,9 +1994,9 @@ p {
 
 .today-focus-no-subtasks {
   margin: 0;
-  margin-inline-start: 1.25em;
   color: var(--color-muted);
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .today-focus-empty {
@@ -2101,6 +2162,10 @@ p {
   border-top: 1px solid var(--color-border);
 }
 
+.network-status-dialog .project-edit-actions {
+  border-top: 0;
+}
+
 @media (max-width: 760px) {
   .project-edit-layout,
   .issue-edit-layout,
@@ -2191,6 +2256,10 @@ p {
   margin: 0;
   overflow-wrap: anywhere;
   white-space: pre-line;
+}
+
+.project-daily-update-display .project-daily-update-picker .project-daily-update-picker-trigger {
+  text-align: left;
 }
 
 .shadcn-combobox-multiple-value {
@@ -4019,12 +4088,6 @@ p {
     grid-template-columns: minmax(0, 2.4fr) minmax(240px, 0.8fr);
   }
 
-  .project-header,
-  .project-row {
-    grid-template-columns: minmax(130px, 1.2fr) minmax(120px, 1.15fr) minmax(120px, 1.15fr) minmax(130px, 0.9fr) minmax(74px, 0.45fr);
-    column-gap: 7px;
-  }
-
 .status-badge {
     min-width: 82px;
     padding-inline: 8px;
@@ -4147,15 +4210,12 @@ p {
     max-width: 40ch;
   }
 
-  .project-table {
-    overflow-x: auto;
+  .project-table-scroll {
     padding-bottom: 3px;
   }
 
-  .project-header,
-  .project-row {
+  .project-table {
     min-width: 840px;
-    grid-template-columns: 175px 155px 155px 175px 80px;
   }
 
   .issue-item {
@@ -4282,10 +4342,13 @@ p {
 }
 
 .dashboard-content .project-name,
-.dashboard-content .project-index,
+.dashboard-content .project-index {
+  font-size: 19px;
+}
+
 .dashboard-content .project-work,
 .dashboard-content .project-schedule-range {
-  font-size: 19px;
+  font-size: 18px;
 }
 
 .dashboard-content .project-progress-indicator {
@@ -4301,16 +4364,19 @@ p {
 }
 
 .dashboard-content .today-focus-project-heading h3 {
-  font-size: calc(var(--type-h3-size) + 2px);
+  font-size: calc(var(--type-h3-size) + 1px);
 }
 
 .dashboard-content .today-focus-subtask {
-  font-size: calc(var(--type-body-size) + 1px);
+  font-size: var(--type-body-size);
 }
 
-.dashboard-content .today-focus-no-subtasks,
 .dashboard-content .ui-empty-description {
   font-size: 13px;
+}
+
+.dashboard-content .today-focus-no-subtasks {
+  font-size: 12px;
 }
 
 .dashboard-content .ui-empty-title {

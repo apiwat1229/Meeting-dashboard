@@ -12,7 +12,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } fr
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/components/ui/toast";
-import { ProjectTaskManager } from "@/components/dashboard/project-subtasks";
+import { ProjectDailyUpdatePicker, ProjectTaskManager } from "@/components/dashboard/project-subtasks";
 import { isSupportedMedia, mediaSizeLimit } from "@/components/dashboard/media-file-picker";
 
 type ImageEntityType = "issue" | "activity";
@@ -623,11 +623,11 @@ export function ProjectDetailsDialog({ project, open, onOpenChange }: { project:
           <div className="project-detail-updates">
             <section className="project-daily-update-display" aria-label="Yesterday">
               <span className="project-detail-update-title">Yesterday</span>
-              <p>{project.yesterday || "No update recorded."}</p>
+              <ProjectDailyUpdatePicker projectId={project.id} field="yesterday" title="Yesterday" value={project.yesterday} tasks={project.tasks} />
             </section>
             <section className="project-daily-update-display" aria-label="Today">
               <span className="project-detail-update-title">Today</span>
-              <p>{project.today || "No update recorded."}</p>
+              <ProjectDailyUpdatePicker projectId={project.id} field="today" title="Today" value={project.today} tasks={project.tasks} />
             </section>
           </div>
           <ProjectTaskManager projectId={project.id} projectName={project.name} tasks={project.tasks} />

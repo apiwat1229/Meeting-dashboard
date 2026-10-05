@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarDays, ChevronDown, ListTodo, Plus, X } from "lucide-react";
-import { createProjectTaskAction, deleteProjectTaskAction, updateProjectTaskAction } from "@/app/actions";
+import { createProjectTaskAction, deleteProjectTaskAction, updateProjectDailyAction, updateProjectTaskAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { ComboboxSelect } from "@/components/ui/combobox";
+import { ComboboxSelect, MultiComboboxSelect } from "@/components/ui/combobox";
 import { ContextMenu } from "@/components/ui/context-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,108 @@ type ProjectTask = {
   startDate: string | null;
   endDate: string | null;
 };
+
+function dailyUpdateTaskIds(value: string, tasks: Array<Pick<ProjectTask, "id" | "title">>) {
+  const taskIdsByTitle = new Map<string, number[]>();
+  for (const task of tasks) {
+    taskIdsByTitle.set(task.title, [...(taskIdsByTitle.get(task.title) ?? []), task.id]);
+  }
+
+  return value.split(/\r?\n/).flatMap((title) => {
+    const matches = taskIdsByTitle.get(title);
+    const id = matches?.shift();
+    return id === undefined ? [] : [String(id)];
+  });
+}
+
+export function ProjectDailyUpdatePicker({
+  projectId,
+  field,
+  title,
+  value,
+  tasks,
+}: {
+  projectId: number;
+  field: "yesterday" | "today";
+  title: "Yesterday" | "Today";
+  value: string;
+  tasks: Array<Pick<ProjectTask, "id" | "title">>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState(() => dailyUpdateTaskIds(value, tasks));
+  const options = tasks.map((task) => ({ value: String(task.id), label: task.title }));
+
+  useEffect(() => {
+    if (!open) setSelectedTaskIds(dailyUpdateTaskIds(value, tasks));
+  }, [open, tasks, value]);
+
+  function changeOpen(nextOpen: boolean) {
+    if (nextOpen) setSelectedTaskIds(dailyUpdateTaskIds(value, tasks));
+    else if (!pending) setSelectedTaskIds(dailyUpdateTaskIds(value, tasks));
+    setOpen(nextOpen);
+  }
+
+  async function saveSelection() {
+    if (pending) return;
+    setPending(true);
+    try {
+      const formData = new FormData();
+      formData.set("id", String(projectId));
+      formData.set("field", field);
+      formData.set("taskIds", JSON.stringify(selectedTaskIds.map(Number)));
+      const result = await updateProjectDailyAction(formData);
+      if (result.ok) {
+        toast.success(result.message);
+        setOpen(false);
+      } else {
+        toast.error(result.message);
+      }
+    } catch {
+      toast.error(`Could not update ${title.toLowerCase()}'s subtasks.`);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const fallbackTitles = value.split(/\r?\n/).filter(Boolean);
+  const footer = (
+    <div className="shadcn-combobox-footer project-daily-update-picker-footer">
+      <span>{selectedTaskIds.length} selected</span>
+      <div>
+        <Button type="button" variant="ghost" disabled={pending} onClick={() => changeOpen(false)}>Cancel</Button>
+        <Button type="button" disabled={pending} onClick={() => { void saveSelection(); }}>{pending ? "Saving…" : "Save"}</Button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="project-daily-update-picker" onClick={(event) => event.stopPropagation()}>
+      <MultiComboboxSelect
+        options={options}
+        value={selectedTaskIds}
+        onValueChange={setSelectedTaskIds}
+        ariaLabel={`Select subtasks for ${title.toLowerCase()}`}
+        placeholder={tasks.length > 0 ? "Choose subtasks" : "No subtasks available"}
+        searchPlaceholder={`Search ${title.toLowerCase()} subtasks`}
+        emptyMessage="No subtasks found."
+        disabled={tasks.length === 0}
+        open={open}
+        onOpenChange={changeOpen}
+        footer={footer}
+        renderValue={(_selectedValues, labels) => {
+          const lines = labels.length > 0 ? labels : !open ? fallbackTitles : [];
+          return lines.length > 0 ? (
+            <span className="project-daily-update-picker-text">{lines.map((label) => `- ${label}`).join("\n")}</span>
+          ) : (
+            <span className="project-daily-update-picker-placeholder">{tasks.length > 0 ? "Choose subtasks" : "No update recorded."}</span>
+          );
+        }}
+        className="project-daily-update-picker-trigger"
+      />
+    </div>
+  );
+}
 
 const statusOptions = [
   { value: "TODO", label: "To do" },
@@ -224,13 +326,22 @@ export function ProjectTaskManager({
       )}
 
       {tasks.length === 0 && !showCreate ? (
-        <Empty className="project-task-empty">
-          <EmptyMedia variant="icon"><ListTodo size={18} /></EmptyMedia>
-          <EmptyHeader>
-            <EmptyTitle>No subtasks yet</EmptyTitle>
-            <EmptyDescription>Add tasks to break this project into smaller steps.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <ContextMenu
+          as="div"
+          className="project-task-empty-context"
+          role="group"
+          ariaLabel={`${projectName} subtasks`}
+          onCreate={() => setShowCreate(true)}
+          createLabel="Add subtask"
+        >
+          <Empty className="project-task-empty">
+            <EmptyMedia variant="icon"><ListTodo size={18} /></EmptyMedia>
+            <EmptyHeader>
+              <EmptyTitle>No subtasks yet</EmptyTitle>
+              <EmptyDescription>Add tasks to break this project into smaller steps.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </ContextMenu>
       ) : (
         <div className="project-task-list">
           <table className="project-task-table" aria-label={`${projectName} subtasks`}>

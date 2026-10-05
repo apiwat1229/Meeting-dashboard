@@ -225,7 +225,7 @@ export function ProjectEditor({ project, tasks, children }: { project: ProjectDa
   }
 
   return (
-    <ContextMenu as="div" className="project-row" role="row" ariaLabel={`Project ${project.name}`} onActivate={() => {
+    <ContextMenu as="tr" className="project-row" role="row" ariaLabel={`Project ${project.name}`} onActivate={() => {
       setOpen(false);
       setConfirmDelete(false);
       setDetailsOpen(true);
@@ -268,17 +268,17 @@ export function ProjectEditor({ project, tasks, children }: { project: ProjectDa
                     <DatePickerField label="End Date" name="endDate" defaultValue={project.endDate} />
                   </div>
                 </section>
-                <section className="project-edit-card project-edit-updates">
-                  <h3>Daily updates</h3>
-                  <ProjectDailyUpdateEditor projectId={project.id} field="yesterday" title="Yesterday" value={yesterday} onChange={setYesterday} tasks={tasks} placeholder="What was completed yesterday?" />
-                  <ProjectDailyUpdateEditor projectId={project.id} field="today" title="Today" value={today} onChange={setToday} tasks={tasks} placeholder="What is planned for today?" />
-                </section>
-              </div>
-              <aside className="project-edit-side">
                 <section className="project-edit-card project-edit-progress-card">
                   <div className="project-detail-progress-heading"><h3>Current progress</h3><strong>{project.progress}%</strong></div>
                   <Progress value={project.progress} tone={project.status === "DELAY" ? "danger" : project.status === "FINISH" ? "finish" : project.status === "ATTENTION" ? "warning" : "success"} />
                   <p>{project.name}</p>
+                </section>
+              </div>
+              <aside className="project-edit-side">
+                <section className="project-edit-card project-edit-updates">
+                  <h3>Daily updates</h3>
+                  <ProjectDailyUpdateEditor projectId={project.id} field="yesterday" title="Yesterday" value={yesterday} onChange={setYesterday} tasks={tasks} placeholder="What was completed yesterday?" />
+                  <ProjectDailyUpdateEditor projectId={project.id} field="today" title="Today" value={today} onChange={setToday} tasks={tasks} placeholder="What is planned for today?" />
                 </section>
               </aside>
             </div>

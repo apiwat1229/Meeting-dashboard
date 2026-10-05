@@ -17,10 +17,15 @@ function DialogClose(props: React.ComponentProps<typeof DialogPrimitive.Close>) 
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
-function DialogContent({ className = "", onClick, ...props }: PopupProps) {
+function DialogContent({ className = "", onClick, onContextMenu, ...props }: PopupProps) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Backdrop data-slot="dialog-backdrop" className="dialog-backdrop" onClick={(event) => event.stopPropagation()} />
+      <DialogPrimitive.Backdrop
+        data-slot="dialog-backdrop"
+        className="dialog-backdrop"
+        onClick={(event) => event.stopPropagation()}
+        onContextMenu={(event) => event.stopPropagation()}
+      />
       <DialogPrimitive.Viewport data-slot="dialog-viewport" className="dialog-viewport">
         <DialogPrimitive.Popup
           data-slot="dialog-content"
@@ -28,6 +33,10 @@ function DialogContent({ className = "", onClick, ...props }: PopupProps) {
           onClick={(event) => {
             event.stopPropagation();
             onClick?.(event);
+          }}
+          onContextMenu={(event) => {
+            event.stopPropagation();
+            onContextMenu?.(event);
           }}
           {...props}
         />

@@ -19,6 +19,7 @@ import { DailyRefresh } from "@/components/dashboard/daily-refresh";
 import { FullScreenToggle } from "@/components/dashboard/full-screen-toggle";
 import { TodayFocus } from "@/components/dashboard/today-focus";
 import { SystemStatusPanel } from "@/components/dashboard/system-status";
+import { ProjectDailyUpdatePicker } from "@/components/dashboard/project-subtasks";
 import { dashboardSectionNumbers } from "@/lib/dashboard-section-numbers";
 
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
@@ -86,19 +87,23 @@ function SummaryBreakdown({
 function ProjectRow({ project, tasks, index }: { project: DashboardData["projects"][number]; tasks: DashboardData["projectTasks"]; index: number }) {
   return (
     <ProjectEditor project={project} tasks={tasks}>
-      <div className="project-name type-body" role="cell">
-        <span className="project-index">{dashboardSectionNumbers.activeProjects}.{index + 1}</span>
-        <span className="project-name-label">{project.name}</span>
-      </div>
-      <span className="project-work type-body" role="cell">{project.yesterday || "—"}</span>
-      <span className="project-work type-body" role="cell">{project.today || "—"}</span>
-      <span className="project-schedule-range type-caption" role="cell">{formatProjectDateRange(project.startDate, project.endDate)}</span>
-      <div className="project-progress-cell" role="cell">
-        <span className={`project-progress-indicator status-${projectProgressTone(project.status)}`} aria-label={`Progress ${project.progress}%`}>
-          <span className="project-progress-dot" aria-hidden="true" />
-          <span>{project.progress}%</span>
-        </span>
-      </div>
+      <td>
+        <div className="project-name type-body">
+          <span className="project-index">{dashboardSectionNumbers.activeProjects}.{index + 1}</span>
+          <span className="project-name-label">{project.name}</span>
+        </div>
+      </td>
+      <td><ProjectDailyUpdatePicker projectId={project.id} field="yesterday" title="Yesterday" value={project.yesterday} tasks={tasks} /></td>
+      <td><ProjectDailyUpdatePicker projectId={project.id} field="today" title="Today" value={project.today} tasks={tasks} /></td>
+      <td><span className="project-schedule-range type-caption">{formatProjectDateRange(project.startDate, project.endDate)}</span></td>
+      <td>
+        <div className="project-progress-cell">
+          <span className={`project-progress-indicator status-${projectProgressTone(project.status)}`} aria-label={`Progress ${project.progress}%`}>
+            <span className="project-progress-dot" aria-hidden="true" />
+            <span>{project.progress}%</span>
+          </span>
+        </div>
+      </td>
     </ProjectEditor>
   );
 }
@@ -134,37 +139,41 @@ function ProjectSection({ data }: { data: DashboardData }) {
             <span className="project-legend-item"><span className="project-legend-swatch legend-finish" aria-hidden="true" />Early</span>
           </div>
         </div>
-        <div className="project-table" role="table" aria-label="Project progress">
-          <div className="project-header type-caption" role="row">
-            <span role="columnheader">Project Name</span>
-            <span role="columnheader">Yesterday Task</span>
-            <span role="columnheader">Today Task</span>
-            <span role="columnheader">Start / End</span>
-            <span role="columnheader">Progress</span>
-          </div>
-          <div className="project-body" role="rowgroup">
-            {data.projects.map((project, index) => (
-              <ProjectRow
-                key={project.id}
-                project={project}
-                tasks={data.projectTasks.filter((task) => task.projectId === project.id)}
-                index={index}
-              />
-            ))}
-            {data.projects.length === 0 && (
-              <div className="project-empty-row" role="row">
-                <div role="cell" aria-colspan={5}>
-                  <Empty className="dashboard-empty">
-                    <EmptyMedia variant="icon"><FolderKanban size={16} /></EmptyMedia>
-                    <EmptyHeader>
-                      <EmptyTitle>No active projects</EmptyTitle>
-                      <EmptyDescription>Add a project to start tracking progress.</EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
-                </div>
-              </div>
-            )}
-          </div>
+        <div className="project-table-scroll">
+          <table className="project-table" aria-label="Project progress">
+            <thead>
+              <tr className="project-header type-caption">
+                <th scope="col">Project Name</th>
+                <th scope="col">Yesterday Task</th>
+                <th scope="col">Today Task</th>
+                <th scope="col">Start / End</th>
+                <th scope="col">Progress</th>
+              </tr>
+            </thead>
+            <tbody className="project-body">
+              {data.projects.map((project, index) => (
+                <ProjectRow
+                  key={project.id}
+                  project={project}
+                  tasks={data.projectTasks.filter((task) => task.projectId === project.id)}
+                  index={index}
+                />
+              ))}
+              {data.projects.length === 0 && (
+                <tr className="project-empty-row">
+                  <td colSpan={5}>
+                    <Empty className="dashboard-empty">
+                      <EmptyMedia variant="icon"><FolderKanban size={16} /></EmptyMedia>
+                      <EmptyHeader>
+                        <EmptyTitle>No active projects</EmptyTitle>
+                        <EmptyDescription>Add a project to start tracking progress.</EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </Card>
     </ProjectCreateProvider>

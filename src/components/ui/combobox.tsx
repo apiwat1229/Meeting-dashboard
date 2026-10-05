@@ -95,6 +95,7 @@ type MultiComboboxSelectProps = {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   footer?: React.ReactNode;
+  renderValue?: (selectedValues: string[], labels: string[]) => React.ReactNode;
 };
 
 export function MultiComboboxSelect({
@@ -110,6 +111,7 @@ export function MultiComboboxSelect({
   open,
   onOpenChange,
   footer,
+  renderValue,
 }: MultiComboboxSelectProps) {
   const optionLabels = React.useMemo(
     () => new Map(options.map((option) => [option.value, option.label])),
@@ -134,6 +136,7 @@ export function MultiComboboxSelect({
         <ComboboxPrimitive.Value>
           {(selectedValues: string[]) => {
             const labels = selectedValues.map((selectedValue) => optionLabels.get(selectedValue) ?? selectedValue);
+            if (renderValue) return renderValue(selectedValues, labels);
             return labels.length > 0 ? (
               <span className="shadcn-combobox-multiple-value">
                 {labels.map((label, index) => <span key={`${selectedValues[index]}-${index}`}>{label}</span>)}

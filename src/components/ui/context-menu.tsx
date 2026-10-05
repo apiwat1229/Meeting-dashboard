@@ -12,7 +12,7 @@ type ContextMenuProps = {
   ariaExpanded?: boolean;
   ariaHasPopup?: "dialog" | "menu";
   children: ReactNode;
-  onEdit: () => void;
+  onEdit?: () => void;
   onDelete?: () => void;
   onActivate?: () => void;
   onCreate?: () => void;
@@ -47,10 +47,12 @@ export function ContextMenu({ as, className, role, ariaLabel, ariaExpanded, aria
                 {createLabel}
               </ContextMenuPrimitive.Item>
             )}
-            <ContextMenuPrimitive.Item className="context-menu-item" onClick={onEdit}>
-              <Pencil size={14} aria-hidden="true" />
-              Edit
-            </ContextMenuPrimitive.Item>
+            {onEdit && (
+              <ContextMenuPrimitive.Item className="context-menu-item" onClick={onEdit}>
+                <Pencil size={14} aria-hidden="true" />
+                Edit
+              </ContextMenuPrimitive.Item>
+            )}
             {onDelete && (
               <ContextMenuPrimitive.Item className="context-menu-item context-menu-item-danger" onClick={onDelete}>
                 <Trash2 size={14} aria-hidden="true" />
