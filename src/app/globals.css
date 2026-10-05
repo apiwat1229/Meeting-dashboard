@@ -769,6 +769,9 @@ p {
 .project-heading {
   align-items: center;
   flex-wrap: wrap;
+  padding-bottom: 7px;
+  margin-bottom: 5px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 85%, var(--color-panel));
 }
 
 .project-status-summary {
