@@ -781,24 +781,30 @@ p {
 }
 
 .project-status-summary .summary-breakdown {
+  width: fit-content;
+  max-width: 100%;
   grid-template-columns: repeat(3, max-content);
   align-items: center;
-  gap: 6px;
+  gap: 0;
+  padding: 4px 9px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, var(--color-ink));
+  border-radius: 8px;
+  background: var(--color-panel);
 }
 
 .project-status-summary .summary-breakdown-item {
   flex-direction: row;
   justify-content: center;
   gap: 7px;
-  padding: 4px 9px;
-  border: 1px solid color-mix(in srgb, var(--color-border) 72%, var(--color-ink));
-  border-radius: 8px;
-  background: var(--color-panel);
+  padding: 0 9px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   white-space: nowrap;
 }
 
 .project-status-summary .summary-breakdown-item + .summary-breakdown-item {
-  padding-left: 9px;
+  padding-left: 14px;
 }
 
 .project-status-summary .summary-breakdown-item strong {
