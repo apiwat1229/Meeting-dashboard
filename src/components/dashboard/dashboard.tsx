@@ -2,6 +2,8 @@ import Link from "next/link";
 import {
   ArrowLeft,
   CircleAlert,
+  CirclePlay,
+  Flag,
   FolderKanban,
   ListTodo,
   LogOut,
@@ -73,7 +75,6 @@ function SummaryBreakdown({
 function ProjectRow({ project, tasks, index }: { project: DashboardData["projects"][number]; tasks: DashboardData["projectTasks"]; index: number }) {
   const startDateLabel = project.startDate ? formatProjectDate(project.startDate) : "—";
   const endDateLabel = project.endDate ? formatProjectDate(project.endDate) : "—";
-  const hasScheduleDate = Boolean(project.startDate || project.endDate);
 
   return (
     <ProjectEditor project={project} tasks={tasks}>
@@ -91,12 +92,14 @@ function ProjectRow({ project, tasks, index }: { project: DashboardData["project
           role="group"
           aria-label={`Start date: ${project.startDate ? startDateLabel : "not set"}; End date: ${project.endDate ? endDateLabel : "not set"}`}
         >
-          {hasScheduleDate ? (
-            <>
-              {project.startDate ? <time dateTime={project.startDate}>{startDateLabel}</time> : <span>—</span>}
-              {project.endDate ? <time dateTime={project.endDate}>{endDateLabel}</time> : <span>—</span>}
-            </>
-          ) : <span>—</span>}
+          <span className="project-schedule-date" title="Start date">
+            <CirclePlay className="project-schedule-icon" aria-hidden="true" />
+            {project.startDate ? <time dateTime={project.startDate}>{startDateLabel}</time> : <span>—</span>}
+          </span>
+          <span className="project-schedule-date" title="End date">
+            <Flag className="project-schedule-icon" aria-hidden="true" />
+            {project.endDate ? <time dateTime={project.endDate}>{endDateLabel}</time> : <span>—</span>}
+          </span>
         </div>
       </td>
       <td>

@@ -977,6 +977,22 @@ p {
   white-space: normal;
 }
 
+.project-schedule-date {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.project-schedule-icon {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  color: var(--color-muted);
+  stroke-width: 2;
+}
+
 .project-schedule-range time {
   white-space: nowrap;
 }
