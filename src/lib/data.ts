@@ -5,6 +5,7 @@ import { defaultTheme } from "@/lib/theme";
 import { themeConfigSchema } from "@/lib/theme-schema";
 import { getBangkokDateKey, shiftDateKey } from "@/lib/date-key";
 import { systemNetworkServiceKeys } from "@/lib/system-status";
+import { defaultCctvMeetings, defaultCctvRecorderItems } from "@/lib/cctv-operations";
 
 async function advanceActivities(today: string, yesterday: string) {
   await db.transaction(async (tx) => {
@@ -167,6 +168,8 @@ export async function getDashboardData() {
       cameraRepairingCount: 0,
       cameraInstallingCount: 0,
       recorderStatus: "OK",
+      cctvRecorderItems: defaultCctvRecorderItems,
+      cctvMeetings: defaultCctvMeetings,
       updatedAt: new Date(),
     },
   };

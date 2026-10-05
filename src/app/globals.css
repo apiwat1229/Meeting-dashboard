@@ -467,6 +467,11 @@ p {
   align-content: stretch;
 }
 
+.summary-cctv-card {
+  grid-template-rows: auto auto;
+  align-content: start;
+}
+
 .summary-systems-card .summary-breakdown-item .summary-breakdown-title {
   display: inline-flex;
   align-items: center;
@@ -536,6 +541,200 @@ p {
   color: var(--color-muted) !important;
   font-size: 13px !important;
   font-weight: 600;
+}
+
+.cctv-operations-panel {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  margin-top: 9px;
+  padding: 10px 4px 2px;
+  border-top: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.cctv-operations-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cctv-operations-heading h3,
+.cctv-meeting-section h4,
+.cctv-manager-section-heading h3 {
+  min-width: 0;
+  margin: 0;
+  color: var(--color-navy);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.cctv-operations-manage {
+  min-height: 28px;
+  flex: 0 0 auto;
+  gap: 5px;
+  padding: 3px 6px;
+  color: var(--color-blue);
+  font-size: 11px;
+}
+
+.cctv-recorder-list {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--color-ink);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.cctv-recorder-list li,
+.cctv-meeting-members {
+  overflow-wrap: anywhere;
+}
+
+.cctv-meeting-section {
+  display: grid;
+  gap: 5px;
+  margin-top: 3px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+}
+
+.cctv-meeting-details {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.cctv-meeting-details > div {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr);
+  gap: 5px;
+  align-items: start;
+}
+
+.cctv-meeting-details dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-muted);
+}
+
+.cctv-meeting-details dt svg {
+  flex: 0 0 auto;
+  color: var(--color-blue);
+}
+
+.cctv-meeting-details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.cctv-operations-empty,
+.cctv-manager-empty {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.cctv-operations-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(88dvh, 900px);
+  overflow-y: auto;
+}
+
+.cctv-operations-form {
+  display: grid;
+  gap: 12px;
+}
+
+.cctv-manager-section {
+  display: grid;
+  gap: 10px;
+}
+
+.cctv-manager-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cctv-manager-section-heading > div {
+  min-width: 0;
+}
+
+.cctv-manager-section-heading p {
+  margin: 3px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.cctv-manager-items,
+.cctv-manager-meetings {
+  display: grid;
+  gap: 8px;
+}
+
+.cctv-manager-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: 7px;
+  align-items: center;
+}
+
+.cctv-manager-remove {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--color-danger) 35%, var(--color-border));
+  border-radius: 8px;
+  color: var(--color-danger);
+  background: var(--color-panel);
+  cursor: pointer;
+}
+
+.cctv-manager-remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.cctv-manager-meeting {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+.cctv-manager-meeting legend {
+  padding: 0 5px;
+  color: var(--color-navy);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cctv-manager-meeting-remove {
+  position: absolute;
+  top: 5px;
+  right: 8px;
+}
+
+.cctv-manager-time-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
 }
 
 .summary-systems-trigger {
@@ -736,10 +935,10 @@ p {
 }
 
 .project-table th:nth-child(1) { width: 24%; }
-.project-table th:nth-child(2) { width: 26%; }
-.project-table th:nth-child(3) { width: 26%; }
-.project-table th:nth-child(4) { width: 15%; }
-.project-table th:nth-child(5) { width: 9%; }
+.project-table th:nth-child(2) { width: 28%; }
+.project-table th:nth-child(3) { width: 28%; }
+.project-table th:nth-child(4) { width: 12%; }
+.project-table th:nth-child(5) { width: 8%; }
 
 .project-header th {
   padding: 3px 9px 8px;
@@ -4265,6 +4464,10 @@ p {
 
   .summary-systems-card .summary-breakdown-item .summary-breakdown-title {
     font-size: min(var(--type-h2-size), 17px);
+  }
+
+  .cctv-manager-time-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .section-description {

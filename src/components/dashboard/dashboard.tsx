@@ -346,6 +346,8 @@ export function Dashboard({ data }: { data: DashboardData }) {
                 cameraWaitingRepairCount: data.settings.cameraWaitingRepairCount,
                 cameraRepairingCount: data.settings.cameraRepairingCount,
                 cameraInstallingCount: data.settings.cameraInstallingCount,
+                recorderItems: data.settings.cctvRecorderItems,
+                meetings: data.settings.cctvMeetings,
                 media: data.cctvMedia,
               }}
             />

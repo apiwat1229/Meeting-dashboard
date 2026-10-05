@@ -1,6 +1,7 @@
 import { boolean, check, date, index, integer, jsonb, pgEnum, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { ThemeConfig } from "@/lib/theme";
+import type { CctvMeeting } from "@/lib/cctv-operations";
 
 export const projectStatus = pgEnum("project_status", ["ON_TRACK", "ATTENTION", "DELAY", "FINISH"]);
 export const projectTaskStatus = pgEnum("project_task_status", ["TODO", "IN_PROGRESS", "DONE"]);
@@ -117,6 +118,8 @@ export const dashboardSettings = pgTable("dashboard_settings", {
   cameraRepairingCount: integer("camera_repairing_count").notNull().default(0),
   cameraInstallingCount: integer("camera_installing_count").notNull().default(0),
   recorderStatus: varchar("recorder_status", { length: 40 }).notNull().default("OK"),
+  cctvRecorderItems: jsonb("cctv_recorder_items").$type<string[]>().notNull().default(sql`'["Defective CCTV", "Waiting for repair", "Repairing CCTV", "Install New CCTV"]'::jsonb`),
+  cctvMeetings: jsonb("cctv_meetings").$type<CctvMeeting[]>().notNull().default(sql`'[{"id":"cctv-meeting-2026-10-08","date":"2026-10-08","startTime":"13:00","endTime":"15:00","members":""}]'::jsonb`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

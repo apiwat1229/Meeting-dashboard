@@ -16,6 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { dashboardSectionNumbers } from "@/lib/dashboard-section-numbers";
+import { CctvOperationsPanel } from "@/components/dashboard/cctv-operations";
+import type { CctvMeeting } from "@/lib/cctv-operations";
 
 type ServiceStatus = "UNKNOWN" | "NORMAL" | "ABNORMAL";
 type NetworkService = {
@@ -35,6 +37,8 @@ type CctvSettings = {
   cameraWaitingRepairCount: number;
   cameraRepairingCount: number;
   cameraInstallingCount: number;
+  recorderItems: string[];
+  meetings: CctvMeeting[];
   media: Array<{ id: number; url: string }>;
 };
 type CctvDraft = {
@@ -335,7 +339,7 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
           </div>
         </ContextMenu>
       </Card>
-      <Card className="summary-card summary-systems-card">
+      <Card className="summary-card summary-systems-card summary-cctv-card">
         <ContextMenu as="div" role="button" className={`summary-breakdown-item summary-${cctvSummary.tone} summary-systems-trigger`} ariaLabel={`${cctvSummary.ariaLabel}. Click to configure.`} ariaExpanded={cctvOpen} ariaHasPopup="dialog" onActivate={editCctvStatus} onEdit={editCctvStatus}>
           <strong className="summary-breakdown-title">
             {dashboardSectionNumbers.cctv}. CCTV
@@ -347,6 +351,7 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
           </strong>
           {cctvSummary.detail && <small>{cctvSummary.detail}</small>}
         </ContextMenu>
+        <CctvOperationsPanel recorderItems={cctv.recorderItems} meetings={cctv.meetings} />
       </Card>
 
       <Dialog open={networkOpen} onOpenChange={closeNetworkDialog}>

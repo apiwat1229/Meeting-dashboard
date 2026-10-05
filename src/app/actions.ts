@@ -327,6 +327,74 @@ export async function saveCctvStatusAction(formData: FormData): Promise<Mutation
   });
 }
 
+const cctvMeetingSchema = z.object({
+  id: z.string().trim().min(1).max(80),
+  date: z.string().trim().refine((value) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  }, "Enter a valid meeting date."),
+  startTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+  endTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+  members: z.string().trim().max(1000),
+}).superRefine((meeting, context) => {
+  if (meeting.endTime <= meeting.startTime) {
+    context.addIssue({ code: "custom", path: ["endTime"], message: "End time must be later than start time." });
+  }
+});
+
+const cctvOperationsSchema = z.object({
+  recorderItems: z.array(z.string().trim().min(1).max(120)).max(30),
+  meetings: z.array(cctvMeetingSchema).max(30),
+}).superRefine((data, context) => {
+  const itemNames = data.recorderItems.map((item) => item.toLocaleLowerCase());
+  if (new Set(itemNames).size !== itemNames.length) {
+    context.addIssue({ code: "custom", path: ["recorderItems"], message: "Recorder item names must be unique." });
+  }
+  const meetingIds = data.meetings.map((meeting) => meeting.id);
+  if (new Set(meetingIds).size !== meetingIds.length) {
+    context.addIssue({ code: "custom", path: ["meetings"], message: "Meeting IDs must be unique." });
+  }
+});
+
+export async function saveCctvOperationsAction(formData: FormData): Promise<MutationResult> {
+  await requireAuthenticatedSession();
+  const rawOperations = formData.get("cctvOperations");
+  if (typeof rawOperations !== "string") return invalidFormResult;
+
+  let decodedOperations: unknown;
+  try {
+    decodedOperations = JSON.parse(rawOperations);
+  } catch {
+    return invalidFormResult;
+  }
+
+  const parsed = cctvOperationsSchema.safeParse(decodedOperations);
+  if (!parsed.success) return invalidFormResult;
+
+  return runMutation("CCTV recorder information saved.", "Could not save CCTV recorder information.", () => db
+    .insert(dashboardSettings)
+    .values({
+      id: "default",
+      purpose: "",
+      focusTitle: "",
+      focusDetail: "",
+      meetingFlow: "",
+      footnote: "",
+      cctvRecorderItems: parsed.data.recorderItems,
+      cctvMeetings: parsed.data.meetings,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: dashboardSettings.id,
+      set: {
+        cctvRecorderItems: parsed.data.recorderItems,
+        cctvMeetings: parsed.data.meetings,
+        updatedAt: new Date(),
+      },
+    }));
+}
+
 export async function saveThemeAction(
   _previousState: { ok: boolean; message: string },
   formData: FormData,
