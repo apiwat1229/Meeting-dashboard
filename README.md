@@ -17,18 +17,26 @@ docker compose -f compose.dev.yaml up --build
 ## เตรียม deploy บน Docker Server
 
 1. คัดลอก `.env.production.example` เป็น `.env.production` แล้วตั้งรหัสผ่าน PostgreSQL ที่เดายาก โดยให้ค่าใน `DATABASE_URL` ตรงกับ `POSTGRES_USER`, `POSTGRES_PASSWORD` และ `POSTGRES_DB` ตั้ง `DASHBOARD_USERNAME`, `DASHBOARD_PASSWORD` และ `DASHBOARD_SESSION_SECRET` ด้วย โดยรหัส Dashboard ต้องแยกจากรหัสเซิร์ฟเวอร์ และ session secret ควรสุ่มอย่างน้อย 32 ตัวอักษร
-2. ส่ง source code ไปยัง Docker Server แล้วรัน:
+2. ส่ง source code ไปยัง Docker Server แล้วรันคำสั่งนี้สำหรับการติดตั้งครั้งแรก:
 
 ```sh
 docker compose --env-file .env.production up -d --build
 ```
 
-Compose จะ build production image, รอ PostgreSQL พร้อมใช้งาน, ใช้ migration ที่ยังไม่เคยรัน และเริ่ม Next.js จาก standalone build ข้อมูลจริงอยู่ใน volume `dashboard_data`; การสร้าง image ใหม่ไม่ลบฐานข้อมูล
+Compose จะ build production image, รอ PostgreSQL พร้อมใช้งาน, ใช้ migration ที่ยังไม่เคยรัน และเริ่ม Next.js จาก standalone build หน้า Dashboard อ่านข้อมูลโปรเจกต์ งานย่อย กิจกรรม และสถานะระบบจาก PostgreSQL ผ่าน Drizzle ORM
 
-ให้เก็บ `.env.production` ไว้นอก Git และตั้ง reverse proxy/TLS ตามโครงสร้างเซิร์ฟเวอร์ของคุณ ตัวอย่าง backup ฐานข้อมูลจาก PowerShell:
+เมื่อฐานข้อมูล production ทำงานอยู่แล้วและต้องการ deploy เฉพาะโค้ด ให้ build และอัปเดตเฉพาะ app service:
+
+```sh
+docker compose --env-file .env.production up -d --build --no-deps app
+```
+
+ข้อมูล PostgreSQL และไฟล์อัปโหลดอยู่ใน named volumes `dashboard_data` และ `dashboard_uploads` ตามลำดับ การ build หรือแทนที่ app container ไม่ลบ volumes เหล่านี้ ห้ามใช้ `docker compose down -v` บน production หากต้องการเก็บข้อมูล
+
+ให้เก็บ `.env.production` ไว้นอก Git และตั้ง reverse proxy/TLS ตามโครงสร้างเซิร์ฟเวอร์ของคุณ ควรสำรองฐานข้อมูลก่อน deploy ที่มี migration ตัวอย่าง backup จาก PowerShell:
 
 ```powershell
-docker compose --env-file .env.production exec -T db pg_dump -U it_dashboard -d it_dashboard > backup.sql
+docker compose --env-file .env.production exec -T db sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > backup.dump
 ```
 
 ระบบจะบังคับเข้าสู่ระบบก่อนดู Dashboard และตรวจสิทธิ์ซ้ำใน Server Actions และ Route Handlers ด้วย Session cookie มีอายุ 12 ชั่วโมง และใช้ `HttpOnly`, `SameSite=Lax` และ `Secure` เมื่อเปิดผ่าน HTTPS หากตั้ง `DASHBOARD_COOKIE_SECURE=false` จะอนุญาตคุกกี้ผ่าน HTTP ซึ่งควรใช้เฉพาะ staging ที่จำกัดอยู่บน loopback เท่านั้น
