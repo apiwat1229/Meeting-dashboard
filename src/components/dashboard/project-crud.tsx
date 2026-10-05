@@ -1,11 +1,11 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
 import { createProjectAction, deleteProjectAction, updateProjectAction } from "@/app/actions";
 import { ConfirmActionDialog } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { ComboboxSelect } from "@/components/ui/combobox";
+import { ComboboxSelect, MultiComboboxSelect } from "@/components/ui/combobox";
 import { ContextMenu } from "@/components/ui/context-menu";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,74 @@ const projectStatusOptions = [
   { value: "DELAY", label: "Delay" },
   { value: "FINISH", label: "Finish" },
 ];
+
+function taskIdsForDailyUpdate(value: string, tasks: ProjectTaskData[]) {
+  const taskIdsByTitle = new Map<string, number[]>();
+  for (const task of tasks) {
+    taskIdsByTitle.set(task.title, [...(taskIdsByTitle.get(task.title) ?? []), task.id]);
+  }
+
+  return value.split(/\r?\n/).flatMap((title) => {
+    const matches = taskIdsByTitle.get(title);
+    const id = matches?.shift();
+    return id === undefined ? [] : [id];
+  });
+}
+
+function ProjectDailyUpdateEditor({
+  projectId,
+  field,
+  title,
+  value,
+  onChange,
+  tasks,
+  placeholder,
+}: {
+  projectId: number;
+  field: "yesterday" | "today";
+  title: "Yesterday" | "Today";
+  value: string;
+  onChange: (value: string) => void;
+  tasks: ProjectTaskData[];
+  placeholder: string;
+}) {
+  const taskOptions = tasks.map((task) => ({ value: String(task.id), label: task.title }));
+  const selectedTaskIds = taskIdsForDailyUpdate(value, tasks).map(String);
+
+  return (
+    <div className="project-edit-daily-field">
+      <label className="field-label" htmlFor={`project-${projectId}-${field}-update`}>{title}</label>
+      <span className="project-edit-daily-picker-label">Select subtasks</span>
+      <MultiComboboxSelect
+        options={taskOptions}
+        value={selectedTaskIds}
+        onValueChange={(values) => {
+          const nextValue = values
+            .map((taskId) => tasks.find((task) => String(task.id) === taskId)?.title)
+            .filter((taskTitle): taskTitle is string => taskTitle !== undefined)
+            .join("\n");
+          onChange(nextValue);
+        }}
+        ariaLabel={`Select subtasks for ${title.toLowerCase()}`}
+        placeholder={tasks.length > 0 ? "Choose subtasks" : "No subtasks available"}
+        searchPlaceholder={`Search ${title.toLowerCase()} subtasks`}
+        emptyMessage="No subtasks found."
+        disabled={tasks.length === 0}
+        className="project-edit-daily-task-picker"
+      />
+      <Textarea
+        id={`project-${projectId}-${field}-update`}
+        name={field}
+        maxLength={500}
+        rows={4}
+        value={value}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        placeholder={placeholder}
+      />
+      {tasks.length === 0 && <span className="project-edit-daily-hint">Add subtasks in project details to select them here.</span>}
+    </div>
+  );
+}
 
 type ProjectStatus = "ON_TRACK" | "ATTENTION" | "DELAY" | "FINISH";
 
@@ -86,8 +154,6 @@ export function ProjectCreateProvider({ children }: { children: ReactNode }) {
               <DatePickerField label="Start Date" name="startDate" />
               <DatePickerField label="End Date" name="endDate" />
             </div>
-            <label className="field-label">Yesterday<Input name="yesterday" maxLength={500} placeholder="Previous update" /></label>
-            <label className="field-label">Today<Input name="today" maxLength={500} placeholder="Today's next step" /></label>
             <Button type="submit"><Plus size={15} /> Save project</Button>
           </form>
         </PopoverContent>
@@ -112,6 +178,14 @@ export function ProjectEditor({ project, tasks, children }: { project: ProjectDa
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, setPending] = useState(false);
+  const [yesterday, setYesterday] = useState(project.yesterday);
+  const [today, setToday] = useState(project.today);
+
+  useEffect(() => {
+    if (!open) return;
+    setYesterday(project.yesterday);
+    setToday(project.today);
+  }, [open, project.id, project.yesterday, project.today]);
 
   async function saveProject(formData: FormData) {
     setPending(true);
@@ -196,8 +270,8 @@ export function ProjectEditor({ project, tasks, children }: { project: ProjectDa
                 </section>
                 <section className="project-edit-card project-edit-updates">
                   <h3>Daily updates</h3>
-                  <label className="field-label">Yesterday<Textarea name="yesterday" maxLength={500} rows={4} defaultValue={project.yesterday} placeholder="What was completed yesterday?" /></label>
-                  <label className="field-label">Today<Textarea name="today" maxLength={500} rows={4} defaultValue={project.today} placeholder="What is planned for today?" /></label>
+                  <ProjectDailyUpdateEditor projectId={project.id} field="yesterday" title="Yesterday" value={yesterday} onChange={setYesterday} tasks={tasks} placeholder="What was completed yesterday?" />
+                  <ProjectDailyUpdateEditor projectId={project.id} field="today" title="Today" value={today} onChange={setToday} tasks={tasks} placeholder="What is planned for today?" />
                 </section>
               </div>
               <aside className="project-edit-side">

@@ -91,6 +91,7 @@ type MultiComboboxSelectProps = {
   emptyMessage?: string;
   className?: string;
   disabled?: boolean;
+  ariaLabel?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   footer?: React.ReactNode;
@@ -105,6 +106,7 @@ export function MultiComboboxSelect({
   emptyMessage = "No options found.",
   className = "",
   disabled = false,
+  ariaLabel,
   open,
   onOpenChange,
   footer,
@@ -128,7 +130,7 @@ export function MultiComboboxSelect({
       itemToStringValue={(option) => option}
       autoHighlight
     >
-      <ComboboxPrimitive.Trigger className={`shadcn-combobox-trigger ${className}`.trim()}>
+      <ComboboxPrimitive.Trigger aria-label={ariaLabel} className={`shadcn-combobox-trigger ${className}`.trim()}>
         <ComboboxPrimitive.Value>
           {(selectedValues: string[]) => {
             const labels = selectedValues.map((selectedValue) => optionLabels.get(selectedValue) ?? selectedValue);

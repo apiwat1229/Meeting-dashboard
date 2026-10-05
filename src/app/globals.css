@@ -1500,6 +1500,12 @@ p {
 
 .project-edit-dialog {
   width: min(940px, calc(100vw - 32px));
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.project-edit-dialog::-webkit-scrollbar {
+  display: none;
 }
 
 .issue-edit-dialog,
@@ -2015,6 +2021,25 @@ p {
 .activity-edit-information textarea {
   min-height: 105px;
   resize: vertical;
+}
+
+.project-edit-daily-field {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.project-edit-daily-picker-label,
+.project-edit-daily-hint {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.project-edit-daily-field .project-edit-daily-task-picker {
+  min-height: 36px;
+  padding: 6px 9px;
+  font-size: 12px;
 }
 
 .project-edit-progress-card {
