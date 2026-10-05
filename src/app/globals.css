@@ -736,10 +736,10 @@ p {
 }
 
 .project-table th:nth-child(1) { width: 24%; }
-.project-table th:nth-child(2) { width: 23%; }
-.project-table th:nth-child(3) { width: 23%; }
-.project-table th:nth-child(4) { width: 19%; }
-.project-table th:nth-child(5) { width: 11%; }
+.project-table th:nth-child(2) { width: 26%; }
+.project-table th:nth-child(3) { width: 26%; }
+.project-table th:nth-child(4) { width: 15%; }
+.project-table th:nth-child(5) { width: 9%; }
 
 .project-header th {
   padding: 3px 9px 8px;
