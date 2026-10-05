@@ -305,7 +305,7 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
     <>
       <Card className="summary-card summary-systems-card">
         <ContextMenu as="div" role="button" className={`summary-breakdown-item summary-${networkSummary.tone} summary-systems-trigger`} ariaLabel={`${networkSummary.ariaLabel}. Click to configure.`} ariaExpanded={networkOpen} ariaHasPopup="dialog" onActivate={editNetworkStatus} onEdit={editNetworkStatus}>
-          <strong className="summary-breakdown-title">
+          <strong className="summary-breakdown-title network-server-title">
             {dashboardSectionNumbers.networkServer}. Network &amp; Server
           </strong>
           <span className={`system-health-label system-health-${networkSummary.tone}`}>{networkSummary.label}</span>

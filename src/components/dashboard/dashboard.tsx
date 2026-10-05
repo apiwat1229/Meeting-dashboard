@@ -28,13 +28,15 @@ type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
 type ProjectStatus = DashboardData["projects"][number]["status"];
 type IssueRow = DashboardData["issues"][number];
 
-function formatProjectDate(dateKey: string, includeYear = true) {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
+function formatProjectDate(dateKey: string) {
+  const formattedDate = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
     month: "short",
-    ...(includeYear ? { year: "numeric" as const } : {}),
+    year: "numeric",
     timeZone: "UTC",
   }).format(new Date(`${dateKey}T00:00:00Z`));
+
+  return formattedDate.replaceAll(" ", "-");
 }
 
 function projectProgressTone(status: ProjectStatus): "success" | "warning" | "danger" | "info" {
@@ -152,7 +154,7 @@ function ProjectSection({ data }: { data: DashboardData }) {
                 <th scope="col">Project Name</th>
                 <th scope="col">Yesterday Task</th>
                 <th scope="col">Today Task</th>
-                <th scope="col">Start / End</th>
+                <th scope="col">Start / Finish</th>
                 <th scope="col">Progress</th>
               </tr>
             </thead>

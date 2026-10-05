@@ -972,7 +972,7 @@ p {
   gap: 1px;
   color: #000;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.25;
   white-space: normal;
 }
@@ -986,11 +986,11 @@ p {
 }
 
 .project-schedule-icon {
-  width: 13px;
-  height: 13px;
-  flex: 0 0 13px;
-  color: var(--color-muted);
-  stroke-width: 2;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  color: var(--color-primary);
+  stroke-width: 1.75;
 }
 
 .project-schedule-range time {
@@ -3043,11 +3043,11 @@ p {
 }
 
 .project-task-status-in_progress {
-  color: var(--color-warning);
+  color: var(--color-primary);
 }
 
 .project-task-status-in_progress::before {
-  background: var(--color-warning);
+  background: var(--color-primary);
 }
 
 .project-task-status-done {
@@ -4447,6 +4447,10 @@ p {
 
 .dashboard-content .summary-systems-card .summary-breakdown-item .summary-breakdown-title {
   font-size: var(--type-h2-size);
+}
+
+.dashboard-content .network-server-title {
+  font-weight: 400;
 }
 
 .dashboard-content .summary-systems-card .summary-breakdown-item > span {
