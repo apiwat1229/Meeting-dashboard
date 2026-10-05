@@ -157,6 +157,7 @@ function ProjectSection({ data }: { data: DashboardData }) {
                 <th scope="col">
                   <span className="project-schedule-heading">
                     <span><CirclePlay className="project-schedule-heading-icon" aria-hidden="true" /> Start</span>
+                    <span aria-hidden="true">/</span>
                     <span><Flag className="project-schedule-heading-icon" aria-hidden="true" /> Finish</span>
                   </span>
                 </th>
