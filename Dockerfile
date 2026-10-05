@@ -15,7 +15,7 @@ CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
 FROM dependencies AS builder
 ENV NODE_ENV=production
 COPY . .
-RUN npm run build
+RUN mkdir -p public && npm run build
 
 FROM node:24-alpine AS runner
 WORKDIR /app
