@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CalendarDays } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
+import { getBangkokDateKey } from "@/lib/date-key";
 import {
   Popover,
   PopoverContent,
@@ -42,10 +44,13 @@ function formatDate(date: Date) {
 }
 
 export function ReportDatePicker({ initialDateKey }: { initialDateKey: string }) {
+  const router = useRouter();
   const [dateKey, setDateKey] = useState(initialDateKey);
   const [open, setOpen] = useState(false);
   const selectedDate = dateFromKey(dateKey);
   const formattedDate = formatDate(selectedDate);
+
+  useEffect(() => setDateKey(initialDateKey), [initialDateKey]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -64,9 +69,12 @@ export function ReportDatePicker({ initialDateKey }: { initialDateKey: string })
           selected={selectedDate}
           onSelect={(date) => {
             if (!date) return;
-            setDateKey(dateKeyFromDate(date));
+            const nextDateKey = dateKeyFromDate(date);
+            setDateKey(nextDateKey);
             setOpen(false);
+            router.push(`/?date=${nextDateKey}`, { scroll: false });
           }}
+          disabled={{ after: dateFromKey(getBangkokDateKey()) }}
           timeZone="Asia/Bangkok"
           captionLayout="label"
           className="report-calendar"

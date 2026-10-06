@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   ArrowLeft,
   CircleAlert,
@@ -7,21 +6,20 @@ import {
   FolderKanban,
   ListTodo,
   LogOut,
-  Settings2,
 } from "lucide-react";
 import { logoutAction } from "@/app/auth-actions";
 import type { getDashboardData } from "@/lib/data";
 import { Card } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { ReportDatePicker } from "@/components/dashboard/report-date-picker";
-import { ActivityEditor, AddActivityMenu } from "@/components/dashboard/activity-crud";
+import { ActivityCreateProvider, ActivityEditor, AddActivityMenu } from "@/components/dashboard/activity-crud";
 import { ActivityStatusIndicator } from "@/components/dashboard/activity-status-indicator";
 import { AddProjectMenu, ProjectCreateProvider, ProjectEditor } from "@/components/dashboard/project-crud";
 import { DailyRefresh } from "@/components/dashboard/daily-refresh";
 import { FullScreenToggle } from "@/components/dashboard/full-screen-toggle";
 import { TodayFocus } from "@/components/dashboard/today-focus";
 import { SystemStatusPanel } from "@/components/dashboard/system-status";
-import { ProjectDailyUpdatePicker } from "@/components/dashboard/project-subtasks";
+import { ProjectDailyUpdateDisplay } from "@/components/dashboard/project-subtasks";
 import { dashboardSectionNumbers } from "@/lib/dashboard-section-numbers";
 
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
@@ -86,8 +84,8 @@ function ProjectRow({ project, tasks, index }: { project: DashboardData["project
           <span className="project-name-label">{project.name}</span>
         </div>
       </td>
-      <td><ProjectDailyUpdatePicker projectId={project.id} field="yesterday" title="Yesterday" value={project.yesterday} tasks={tasks} /></td>
-      <td><ProjectDailyUpdatePicker projectId={project.id} field="today" title="Today" value={project.today} tasks={tasks} /></td>
+      <td><ProjectDailyUpdateDisplay projectName={project.name} title="Yesterday" value={project.yesterday} /></td>
+      <td><ProjectDailyUpdateDisplay projectName={project.name} title="Today" value={project.today} /></td>
       <td>
         <div
           className="project-schedule-range type-caption"
@@ -157,7 +155,6 @@ function ProjectSection({ data }: { data: DashboardData }) {
                 <th scope="col">
                   <span className="project-schedule-heading">
                     <span><CirclePlay className="project-schedule-heading-icon" aria-hidden="true" /> Start</span>
-                    <span aria-hidden="true">/</span>
                     <span><Flag className="project-schedule-heading-icon" aria-hidden="true" /> Finish</span>
                   </span>
                 </th>
@@ -212,73 +209,73 @@ function ActivitySection({
     : dashboardSectionNumbers.yesterdayActivities;
 
   return (
-    <Card className="activity-card" aria-label={`${sectionNumber}. ${title}`}>
-      <div className="section-heading activity-heading">
-        <AddActivityMenu section={section}>
-          <h2 className="type-h2">{sectionNumber}. {title}</h2>
-        </AddActivityMenu>
-      </div>
-      <ul className="activity-list">
-        {entries.map((activity, index) => (
-          <ActivityEditor
-            key={activity.id}
-            activity={activity}
-            relatedIssues={data.issues.filter((issue) => issue.relatedActivityId === activity.id).map((issue) => ({
-              id: issue.id,
-              title: issue.title,
-              severity: issue.severity,
-              state: issue.state,
-            }))}
-          >
-            {section === "YESTERDAY" ? (
+    <ActivityCreateProvider section={section} supplierNames={data.supplierNames}>
+      <Card className="activity-card" aria-label={`${sectionNumber}. ${title}`}>
+        <div className="section-heading activity-heading">
+          <AddActivityMenu>
+            <h2 className="type-h2">{sectionNumber}. {title}</h2>
+          </AddActivityMenu>
+        </div>
+        <ul className="activity-list">
+          {entries.map((activity, index) => (
+            <ActivityEditor
+              key={activity.id}
+              activity={activity}
+              supplierNames={data.supplierNames}
+              relatedIssues={data.issues.filter((issue) => issue.relatedActivityId === activity.id).map((issue) => ({
+                id: issue.id,
+                title: issue.title,
+                severity: issue.severity,
+                state: issue.state,
+              }))}
+            >
               <ActivityStatusIndicator
                 completed={activity.completed}
-                continuing={Boolean(activity.isCarryover || activity.willCarryOver)}
-                highPriority={activity.severity === "HIGH"}
+                continuing={section === "YESTERDAY" && Boolean(activity.isCarryover || activity.willCarryOver)}
               />
-            ) : null}
-            <span className="activity-number" aria-hidden="true">{sectionNumber}.{index + 1}</span>
-            <span className="activity-content type-body">{activity.content}</span>
-            {(activity.isCarryover || activity.willCarryOver) && (
-              <span className={`activity-carryover-tag ${activity.willCarryOver ? "activity-carryover-pending" : "activity-carryover-today"}`}>
-                <ArrowLeft size={16} aria-hidden="true" />
-                {activity.willCarryOver ? "Continued" : "From yesterday"}
-              </span>
-            )}
-          </ActivityEditor>
-        ))}
-        {entries.length === 0 && relatedIssues.length === 0 && (
-          <li className="activity-empty-item">
-            <Empty className="dashboard-empty">
-              <EmptyMedia variant="icon"><ListTodo size={16} /></EmptyMedia>
-              <EmptyHeader>
-                <EmptyTitle>No items yet</EmptyTitle>
-                <EmptyDescription>Add an item to this section.</EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          </li>
-        )}
-      </ul>
-      {relatedIssues.length > 0 && (
-        <section className="section-linked-issues" aria-label={`Issues related to ${title}`}>
-          <h3><CircleAlert size={14} aria-hidden="true" /> Related issues</h3>
-          <ul className="section-linked-issue-list">
-            {relatedIssues.map((issue, index) => (
-              <li key={issue.id} className={`section-linked-issue section-linked-${issueTone(issue)}`}>
-                <span className="section-linked-issue-dot" aria-hidden="true" />
-                <div>
-                  <strong>{sectionNumber}.{entries.length + index + 1} {issue.title}</strong>
-                  {issue.relatedActivityTitle && <span>{issue.relatedActivityTitle}</span>}
-                </div>
-                <span className="section-linked-issue-status">
-                  {issue.state === "CLOSED" ? "Done" : issue.severity === "HIGH" ? "High" : "Medium"}
+              <span className="activity-number" aria-hidden="true">{sectionNumber}.{index + 1}</span>
+              <span className="activity-content type-body">{activity.content}</span>
+              {(activity.isCarryover || activity.willCarryOver) && (
+                <span className={`activity-carryover-tag ${activity.willCarryOver ? "activity-carryover-pending" : "activity-carryover-today"}`}>
+                  <ArrowLeft size={16} aria-hidden="true" />
+                  {activity.willCarryOver ? "Continued" : "From yesterday"}
                 </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </Card>
+              )}
+            </ActivityEditor>
+          ))}
+          {entries.length === 0 && relatedIssues.length === 0 && (
+            <li className="activity-empty-item">
+              <Empty className="dashboard-empty">
+                <EmptyMedia variant="icon"><ListTodo size={16} /></EmptyMedia>
+                <EmptyHeader>
+                  <EmptyTitle>No items yet</EmptyTitle>
+                  <EmptyDescription>Add an item to this section.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            </li>
+          )}
+        </ul>
+        {relatedIssues.length > 0 && (
+          <section className="section-linked-issues" aria-label={`Issues related to ${title}`}>
+            <h3><CircleAlert size={14} aria-hidden="true" /> Related issues</h3>
+            <ul className="section-linked-issue-list">
+              {relatedIssues.map((issue, index) => (
+                <li key={issue.id} className={`section-linked-issue section-linked-${issueTone(issue)}`}>
+                  <span className="section-linked-issue-dot" aria-hidden="true" />
+                  <div>
+                    <strong>{sectionNumber}.{entries.length + index + 1} {issue.title}</strong>
+                    {issue.relatedActivityTitle && <span>{issue.relatedActivityTitle}</span>}
+                  </div>
+                  <span className="section-linked-issue-status">
+                    {issue.state === "CLOSED" ? "Done" : issue.severity === "HIGH" ? "High" : "Medium"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </Card>
+    </ActivityCreateProvider>
   );
 }
 
@@ -306,14 +303,6 @@ export function Dashboard({ data }: { data: DashboardData }) {
           <div className="report-meta type-caption">
             <ReportDatePicker initialDateKey={reportDateKey} />
             <FullScreenToggle />
-            <Link
-              href="/settings/theme"
-              className="button button-secondary theme-topbar-button"
-              aria-label="Theme settings"
-              title="Theme settings"
-            >
-              <Settings2 size={17} aria-hidden="true" />
-            </Link>
             <form action={logoutAction}>
               <button className="button button-secondary dashboard-logout-button" type="submit" title="Log out" aria-label="Log out">
                 <LogOut size={17} aria-hidden="true" />
@@ -338,6 +327,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
             <ActivitySection section="TODAY" title="Today Activities" data={data} />
             <ActivitySection section="YESTERDAY" title="Yesterday Activities" data={data} />
             <SystemStatusPanel
+              reportDateKey={data.reportDateKey}
               networkServices={data.networkServices}
               cctv={{
                 cameraCount: data.settings.cameraCount,

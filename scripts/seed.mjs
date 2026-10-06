@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import pg from "pg";
 
 const { Client } = pg;
@@ -9,8 +7,6 @@ if (!connectionString) {
   throw new Error("DATABASE_URL is required to seed the development database.");
 }
 
-const themePath = new URL("../src/lib/theme-default.json", import.meta.url);
-const defaultTheme = JSON.parse(await readFile(fileURLToPath(themePath), "utf8"));
 const client = new Client({ connectionString });
 const dateParts = Object.fromEntries(
   new Intl.DateTimeFormat("en-CA", {
@@ -69,23 +65,17 @@ try {
   }
 
   await client.query(
-    `INSERT INTO theme_settings (id, config)
-     VALUES ('default', $1::jsonb)
-     ON CONFLICT (id) DO NOTHING`,
-    [JSON.stringify(defaultTheme)],
-  );
-
-  await client.query(
     `INSERT INTO dashboard_settings
        (id, owner, report_time, purpose, focus_title, focus_detail, meeting_flow, footnote, camera_count, recorder_status)
      VALUES
-       ('default', 'IT', '08:00',
+       ($1, 'IT', '08:00',
         'Align on summary, risks, and details only when needed.',
         'HR System', 'Fix login error  |  Test by 15:00',
         'Overall status → Red / yellow items → Today’s focus → Detail sheet only if requested',
         'Dashboard stays shared during the meeting to reduce screen switching and Excel sheet navigation.',
         135, 'OK')
      ON CONFLICT (id) DO NOTHING`,
+    [todayDate],
   );
 
   await client.query("COMMIT");

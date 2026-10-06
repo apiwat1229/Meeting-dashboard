@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { dashboardSectionNumbers } from "@/lib/dashboard-section-numbers";
 import { CctvOperationsPanel } from "@/components/dashboard/cctv-operations";
-import type { CctvMeeting } from "@/lib/cctv-operations";
+import type { CctvMeeting, CctvRecorderItem } from "@/lib/cctv-operations";
 
 type ServiceStatus = "UNKNOWN" | "NORMAL" | "ABNORMAL";
 type NetworkService = {
@@ -37,7 +37,7 @@ type CctvSettings = {
   cameraWaitingRepairCount: number;
   cameraRepairingCount: number;
   cameraInstallingCount: number;
-  recorderItems: string[];
+  recorderItems: CctvRecorderItem[];
   meetings: CctvMeeting[];
   media: Array<{ id: number; url: string }>;
 };
@@ -49,6 +49,7 @@ type CctvDraft = {
   cameraRepairingCount: string;
   cameraInstallingCount: string;
 };
+type CctvStatusSaveResult = { ok: boolean; message: string; mediaWarning?: string };
 
 const serviceStatusOptions = [
   { value: "UNKNOWN", label: "Not set" },
@@ -115,7 +116,8 @@ function getCctvSummary(settings: CctvSettings) {
     [settings.cameraInstallingCount, "installing"],
   ] as const;
   const attentionCount = issueCounts.reduce((sum, [count]) => sum + count, 0);
-  const detail = issueCounts.filter(([count]) => count > 0).map(([count, label]) => `${count} ${label}`).join(" · ") || undefined;
+  const allStatusDetails = issueCounts.filter(([count]) => count > 0).map(([count, label]) => `${count} ${label}`).join(" · ");
+  const detail = settings.cameraInstallingCount > 0 ? `${settings.cameraInstallingCount} new installation` : undefined;
   if (settings.cameraCount === 0) {
     return { value: 0, label: "No cameras reported", detail: undefined, tone: "neutral" as const, ariaLabel: "No CCTV cameras reported" };
   }
@@ -128,17 +130,8 @@ function getCctvSummary(settings: CctvSettings) {
     label: `${attentionCount} need attention`,
     detail,
     tone: workingCount === 0 ? "danger" as const : "warning" as const,
-    ariaLabel: `${settings.cameraCount} CCTV cameras total, ${workingCount} working, ${detail}`,
+    ariaLabel: `${settings.cameraCount} CCTV cameras total, ${workingCount} working, ${allStatusDetails}`,
   };
-}
-
-function getCctvIssueCounts(settings: CctvSettings) {
-  return [
-    { label: "Faulty", count: settings.cameraFaultyCount },
-    { label: "Waiting for repair", count: settings.cameraWaitingRepairCount },
-    { label: "Being repaired", count: settings.cameraRepairingCount },
-    { label: "New installation", count: settings.cameraInstallingCount },
-  ];
 }
 
 function SavedMedia({ label, media, pending, onRemove }: {
@@ -173,13 +166,11 @@ function SavedMedia({ label, media, pending, onRemove }: {
   );
 }
 
-export function SystemStatusPanel({ networkServices, cctv }: { networkServices: NetworkService[]; cctv: CctvSettings }) {
+export function SystemStatusPanel({ networkServices, cctv, reportDateKey }: { networkServices: NetworkService[]; cctv: CctvSettings; reportDateKey: string }) {
   const router = useRouter();
   const networkSummary = getNetworkSummary(networkServices);
   const cctvSummary = getCctvSummary(cctv);
-  const cctvIssueCounts = getCctvIssueCounts(cctv);
   const [networkOpen, setNetworkOpen] = useState(false);
-  const [cctvOpen, setCctvOpen] = useState(false);
   const [networkPending, setNetworkPending] = useState(false);
   const [cctvPending, setCctvPending] = useState(false);
   const [serviceDrafts, setServiceDrafts] = useState<ServiceDraft[]>(() => createServiceDrafts(networkServices));
@@ -196,7 +187,6 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
   function editCctvStatus() {
     setCctvDraft(createCctvDraft(cctv));
     setPendingCctvMedia([]);
-    setCctvOpen(true);
   }
 
   function closeNetworkDialog(open: boolean) {
@@ -204,14 +194,6 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
     if (!open && !networkPending) {
       setServiceDrafts(createServiceDrafts(networkServices));
       setPendingMedia({});
-    }
-  }
-
-  function closeCctvDialog(open: boolean) {
-    setCctvOpen(open);
-    if (!open && !cctvPending) {
-      setCctvDraft(createCctvDraft(cctv));
-      setPendingCctvMedia([]);
     }
   }
 
@@ -226,10 +208,11 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
     if (key === "cameraFaultyCount" && Number(value) === 0) setPendingCctvMedia([]);
   }
 
-  async function removeSavedMedia(entityType: "networkService" | "cctv", entityId: number | "default", attachmentId: number) {
+  async function removeSavedMedia(entityType: "networkService" | "cctv", entityId: number | string, attachmentId: number) {
     const formData = new FormData();
     formData.set("entityType", entityType);
     formData.set("entityId", String(entityId));
+    formData.set("reportDate", reportDateKey);
     formData.set("attachmentId", String(attachmentId));
     formData.set("remove", "true");
     try {
@@ -282,24 +265,21 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
     }
   }
 
-  async function saveCctv(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function saveCctvStatus(formData: FormData): Promise<CctvStatusSaveResult> {
     setCctvPending(true);
     try {
-      const formData = new FormData(event.currentTarget);
       const result = await saveCctvStatusAction(formData);
-      if (!result.ok) {
-        toast.error(result.message);
-        return;
-      }
-      const uploadResult = await uploadMediaFiles("cctv", "default", pendingCctvMedia);
-      router.refresh();
+      if (!result.ok) return result;
+      const uploadResult = await uploadMediaFiles("cctv", reportDateKey, pendingCctvMedia);
       setPendingCctvMedia([]);
-      closeCctvDialog(false);
-      if (uploadResult.failed.length > 0) toast.error(`CCTV status saved; ${uploadResult.uploaded} photos uploaded, ${uploadResult.failed.length} failed.`);
-      else toast.success(uploadResult.uploaded > 0 ? `CCTV status saved with ${uploadResult.uploaded} photos.` : result.message);
+      return {
+        ...result,
+        mediaWarning: uploadResult.failed.length > 0
+          ? `CCTV status saved; ${uploadResult.uploaded} photos uploaded, ${uploadResult.failed.length} failed.`
+          : undefined,
+      };
     } catch {
-      toast.error("Could not save CCTV status.");
+      return { ok: false, message: "Could not save CCTV status." };
     } finally {
       setCctvPending(false);
     }
@@ -340,18 +320,66 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
         </ContextMenu>
       </Card>
       <Card className="summary-card summary-systems-card summary-cctv-card">
-        <ContextMenu as="div" role="button" className={`summary-breakdown-item summary-${cctvSummary.tone} summary-systems-trigger`} ariaLabel={`${cctvSummary.ariaLabel}. Click to configure.`} ariaExpanded={cctvOpen} ariaHasPopup="dialog" onActivate={editCctvStatus} onEdit={editCctvStatus}>
-          <strong className="summary-breakdown-title">
-            {dashboardSectionNumbers.cctv}. CCTV
-          </strong>
-          <span className={`cctv-status-label cctv-status-${cctvSummary.tone}`}>{cctvSummary.label}</span>
-          <strong className="cctv-camera-count">
-            <span className="cctv-camera-count-value">{cctvSummary.value}</span>
-            <span className="cctv-camera-count-unit">cameras</span>
-          </strong>
-          {cctvSummary.detail && <small>{cctvSummary.detail}</small>}
-        </ContextMenu>
-        <CctvOperationsPanel recorderItems={cctv.recorderItems} meetings={cctv.meetings} />
+        <CctvOperationsPanel
+          reportDateKey={reportDateKey}
+          recorderItems={cctv.recorderItems}
+          cameraStatusCounts={{
+            faulty: cctv.cameraFaultyCount,
+            waiting: cctv.cameraWaitingRepairCount,
+            repairing: cctv.cameraRepairingCount,
+          }}
+          meetings={cctv.meetings}
+          summary={cctvSummary}
+          sectionNumber={dashboardSectionNumbers.cctv}
+          onOpenStatus={editCctvStatus}
+          saveStatus={saveCctvStatus}
+          statusFields={(spareCctvField) => (
+            <>
+              <div className="cctv-count-card">
+                <label className="field-label">Total cameras
+                  <Input name="cameraCount" type="number" min="0" max="100000" step="1" required value={cctvDraft.cameraCount} onChange={updateCctv} />
+                </label>
+                <div className="cctv-count-grid">
+                  <label className="field-label">Faulty
+                    <Input name="cameraFaultyCount" type="number" min="0" max="100000" step="1" required value={cctvDraft.cameraFaultyCount} onChange={updateCctv} />
+                  </label>
+                  <label className="field-label">Waiting for repair
+                    <Input name="cameraWaitingRepairCount" type="number" min="0" max="100000" step="1" required value={cctvDraft.cameraWaitingRepairCount} onChange={updateCctv} />
+                  </label>
+                  <label className="field-label">Being repaired
+                    <Input name="cameraRepairingCount" type="number" min="0" max="100000" step="1" required value={cctvDraft.cameraRepairingCount} onChange={updateCctv} />
+                  </label>
+                  <label className="field-label">New installation
+                    <Input name="cameraInstallingCount" type="number" min="0" max="100000" step="1" required value={cctvDraft.cameraInstallingCount} onChange={updateCctv} />
+                  </label>
+                  {spareCctvField}
+                </div>
+                <p className="cctv-count-help">The four status counts together cannot exceed the total camera count.</p>
+                {Number(cctvDraft.cameraFaultyCount) > 0 && (
+                  <div className="cctv-fault-fields">
+                    <label className="field-label">Reason for faulty cameras
+                      <Textarea name="cameraFaultReason" required maxLength={2000} rows={3} value={cctvDraft.cameraFaultReason} onChange={updateCctv} placeholder="Describe why the cameras are faulty" />
+                    </label>
+                    <MediaFilePicker
+                      files={pendingCctvMedia}
+                      pending={cctvPending}
+                      onFilesChange={setPendingCctvMedia}
+                      className="network-service-upload"
+                      frameClassName="network-service-upload-grid"
+                      label="CCTV fault photos"
+                    />
+                  </div>
+                )}
+              </div>
+              <SavedMedia
+                label="CCTV"
+                media={cctv.media}
+                pending={cctvPending}
+                onRemove={(attachmentId) => { void removeSavedMedia("cctv", reportDateKey, attachmentId); }}
+              />
+            </>
+          )}
+        />
       </Card>
 
       <Dialog open={networkOpen} onOpenChange={closeNetworkDialog}>
@@ -413,64 +441,6 @@ export function SystemStatusPanel({ networkServices, cctv }: { networkServices: 
         </DialogContent>
       </Dialog>
 
-      <Dialog open={cctvOpen} onOpenChange={closeCctvDialog}>
-        <DialogContent className="detail-dialog-content system-status-dialog cctv-status-dialog">
-          <div className="detail-dialog-header">
-            <div>
-              <DialogTitle>CCTV</DialogTitle>
-              <DialogDescription>Enter the camera total and status counts. Add a reason and photos when any cameras are faulty.</DialogDescription>
-            </div>
-            <DialogClose className="icon-button project-tasks-close" aria-label="Close CCTV status"><X size={17} /></DialogClose>
-          </div>
-          <form onSubmit={(event) => { void saveCctv(event); }} className="system-status-form">
-            <section className="project-edit-card cctv-count-card">
-              <label className="field-label">Total cameras
-                <Input name="cameraCount" type="number" min="0" max="100000" step="1" required value={cctvDraft.cameraCount} onChange={updateCctv} />
-              </label>
-              <div className="cctv-count-grid">
-                <label className="field-label">Faulty
-                  <Input name="cameraFaultyCount" type="number" min="0" max="100000" step="1" required value={cctvDraft.cameraFaultyCount} onChange={updateCctv} />
-                </label>
-                <label className="field-label">Waiting for repair
-                  <Input name="cameraWaitingRepairCount" type="number" min="0" max="100000" step="1" required value={cctvDraft.cameraWaitingRepairCount} onChange={updateCctv} />
-                </label>
-                <label className="field-label">Being repaired
-                  <Input name="cameraRepairingCount" type="number" min="0" max="100000" step="1" required value={cctvDraft.cameraRepairingCount} onChange={updateCctv} />
-                </label>
-                <label className="field-label">New installation
-                  <Input name="cameraInstallingCount" type="number" min="0" max="100000" step="1" required value={cctvDraft.cameraInstallingCount} onChange={updateCctv} />
-                </label>
-              </div>
-              <p className="cctv-count-help">The four status counts together cannot exceed the total camera count.</p>
-              {Number(cctvDraft.cameraFaultyCount) > 0 && (
-                <div className="cctv-fault-fields">
-                  <label className="field-label">Reason for faulty cameras
-                    <Textarea name="cameraFaultReason" required maxLength={2000} rows={3} value={cctvDraft.cameraFaultReason} onChange={updateCctv} placeholder="Describe why the cameras are faulty" />
-                  </label>
-                  <MediaFilePicker
-                    files={pendingCctvMedia}
-                    pending={cctvPending}
-                    onFilesChange={setPendingCctvMedia}
-                    className="network-service-upload"
-                    frameClassName="network-service-upload-grid"
-                    label="CCTV fault photos"
-                  />
-                </div>
-              )}
-            </section>
-            <SavedMedia
-              label="CCTV"
-              media={cctv.media}
-              pending={cctvPending}
-              onRemove={(attachmentId) => { void removeSavedMedia("cctv", "default", attachmentId); }}
-            />
-            <div className="project-edit-actions">
-              <Button type="button" variant="secondary" onClick={() => closeCctvDialog(false)} disabled={cctvPending}>Cancel</Button>
-              <Button type="submit" disabled={cctvPending}>{cctvPending ? "Saving…" : "Save status"}</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

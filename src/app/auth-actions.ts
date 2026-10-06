@@ -13,7 +13,7 @@ export async function loginAction(_previousState: LoginState, formData: FormData
   const username = formData.get("username");
   const password = formData.get("password");
   if (typeof username !== "string" || typeof password !== "string" || !verifyDashboardCredentials(username, password)) {
-    return { error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
+    return { error: "Incorrect username or password." };
   }
 
   await createDashboardSession();

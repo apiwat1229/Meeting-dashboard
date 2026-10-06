@@ -1,7 +1,6 @@
 import { boolean, check, date, index, integer, jsonb, pgEnum, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import type { ThemeConfig } from "@/lib/theme";
-import type { CctvMeeting } from "@/lib/cctv-operations";
+import type { CctvMeeting, CctvRecorderItem } from "@/lib/cctv-operations";
 
 export const projectStatus = pgEnum("project_status", ["ON_TRACK", "ATTENTION", "DELAY", "FINISH"]);
 export const projectTaskStatus = pgEnum("project_task_status", ["TODO", "IN_PROGRESS", "DONE"]);
@@ -14,20 +13,25 @@ export const networkServiceStatuses = pgTable(
   "network_service_statuses",
   {
     id: serial("id").primaryKey(),
-    serviceKey: varchar("service_key", { length: 40 }).notNull().unique(),
+    serviceKey: varchar("service_key", { length: 40 }).notNull(),
+    reportDate: date("report_date", { mode: "string" }).notNull().default(sql`(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date`),
     label: varchar("label", { length: 80 }).notNull(),
     status: varchar("status", { length: 20 }).notNull().default("UNKNOWN"),
     reason: varchar("reason", { length: 240 }).notNull().default(""),
     detail: text("detail").notNull().default(""),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [check("network_service_status_value", sql`${table.status} in ('UNKNOWN', 'NORMAL', 'ABNORMAL')`)],
+  (table) => [
+    check("network_service_status_value", sql`${table.status} in ('UNKNOWN', 'NORMAL', 'ABNORMAL')`),
+    index("network_service_statuses_report_idx").on(table.reportDate, table.serviceKey),
+  ],
 );
 
 export const projects = pgTable(
   "projects",
   {
     id: serial("id").primaryKey(),
+    reportDate: date("report_date", { mode: "string" }).notNull().default(sql`(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date`),
     name: varchar("name", { length: 140 }).notNull(),
     status: projectStatus("status").notNull().default("ON_TRACK"),
     yesterday: text("yesterday").notNull().default(""),
@@ -44,6 +48,7 @@ export const projects = pgTable(
 
 export const projectTasks = pgTable("project_tasks", {
   id: serial("id").primaryKey(),
+  reportDate: date("report_date", { mode: "string" }).notNull().default(sql`(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date`),
   projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   title: varchar("title", { length: 220 }).notNull(),
   status: projectTaskStatus("status").notNull().default("TODO"),
@@ -58,31 +63,43 @@ export const projectChangeHistory = pgTable(
   "project_change_history",
   {
     id: serial("id").primaryKey(),
+    reportDate: date("report_date", { mode: "string" }).notNull().default(sql`(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date`),
     projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
     field: varchar("field", { length: 40 }).notNull(),
     oldValue: text("old_value"),
     newValue: text("new_value"),
     changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("project_change_history_project_changed_idx").on(table.projectId, table.changedAt.desc(), table.id.desc())],
+  (table) => [index("project_change_history_project_changed_idx").on(table.reportDate, table.projectId, table.changedAt.desc(), table.id.desc())],
 );
 
 export const activities = pgTable("activities", {
   id: serial("id").primaryKey(),
+  reportDate: date("report_date", { mode: "string" }).notNull().default(sql`(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date`),
   section: activitySection("section").notNull(),
   content: varchar("content", { length: 220 }).notNull(),
+  description: text("description").notNull().default(""),
   severity: activitySeverity("severity").notNull().default("MEDIUM"),
   imageUrl: text("image_url").notNull().default(""),
   completed: boolean("completed").notNull().default(false),
+  progress: integer("progress").notNull().default(0),
   activityDate: date("activity_date", { mode: "string" }).notNull().defaultNow(),
+  startDate: date("start_date", { mode: "string" }),
+  finishDate: date("finish_date", { mode: "string" }),
+  supplierRequired: boolean("supplier_required").notNull().default(false),
+  supplierName: varchar("supplier_name", { length: 180 }),
+  supplierContact: varchar("supplier_contact", { length: 180 }),
+  supplierPhone: varchar("supplier_phone", { length: 80 }),
+  supplierDetails: text("supplier_details"),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [check("activities_progress_range", sql`${table.progress} between 0 and 100`)]);
 
 export const issues = pgTable(
   "issues",
   {
     id: serial("id").primaryKey(),
+    reportDate: date("report_date", { mode: "string" }).notNull().default(sql`(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date`),
     projectId: integer("project_id").references(() => projects.id, { onDelete: "set null" }),
     relatedSection: activitySection("related_section"),
     relatedActivityId: integer("related_activity_id").references(() => activities.id, { onDelete: "set null" }),
@@ -101,6 +118,7 @@ export const issues = pgTable(
 
 export const dashboardSettings = pgTable("dashboard_settings", {
   id: varchar("id", { length: 40 }).primaryKey(),
+  reportDate: date("report_date", { mode: "string" }).notNull().default(sql`(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date`),
   owner: varchar("owner", { length: 80 }).notNull().default("IT"),
   reportTime: varchar("report_time", { length: 12 }).notNull().default("08:00"),
   purpose: text("purpose").notNull(),
@@ -118,7 +136,7 @@ export const dashboardSettings = pgTable("dashboard_settings", {
   cameraRepairingCount: integer("camera_repairing_count").notNull().default(0),
   cameraInstallingCount: integer("camera_installing_count").notNull().default(0),
   recorderStatus: varchar("recorder_status", { length: 40 }).notNull().default("OK"),
-  cctvRecorderItems: jsonb("cctv_recorder_items").$type<string[]>().notNull().default(sql`'["Defective CCTV", "Waiting for repair", "Repairing CCTV", "Install New CCTV"]'::jsonb`),
+  cctvRecorderItems: jsonb("cctv_recorder_items").$type<CctvRecorderItem[]>().notNull().default(sql`'[{"id":"recorder-defective","name":"Status CCTV","quantity":0,"reason":"","media":[]},{"id":"recorder-waiting","name":"Waiting for repair","quantity":0,"reason":"","media":[]},{"id":"recorder-repairing","name":"Repairing CCTV","quantity":0,"reason":"","media":[]},{"id":"recorder-spare","name":"Spare CCTV","quantity":0,"reason":"","media":[]}]'::jsonb`),
   cctvMeetings: jsonb("cctv_meetings").$type<CctvMeeting[]>().notNull().default(sql`'[{"id":"cctv-meeting-2026-10-08","date":"2026-10-08","startTime":"13:00","endTime":"15:00","members":""}]'::jsonb`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -143,8 +161,9 @@ export const mediaAttachments = pgTable(
   ],
 );
 
-export const themeSettings = pgTable("theme_settings", {
-  id: varchar("id", { length: 40 }).primaryKey(),
-  config: jsonb("config").$type<ThemeConfig>().notNull(),
+export const dashboardReportDays = pgTable("dashboard_report_days", {
+  reportDate: date("report_date", { mode: "string" }).primaryKey(),
+  copiedFrom: date("copied_from", { mode: "string" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -10,15 +10,15 @@ export function LoginForm() {
 
   return (
     <form className="login-form" action={action}>
-      <label htmlFor="username">ชื่อผู้ใช้</label>
+      <label htmlFor="username">Username</label>
       <input id="username" name="username" type="text" autoComplete="username" required autoFocus />
 
-      <label htmlFor="password">รหัสผ่าน</label>
+      <label htmlFor="password">Password</label>
       <input id="password" name="password" type="password" autoComplete="current-password" required />
 
       {state.error && <p className="login-error" role="alert">{state.error}</p>}
       <button className="login-submit" type="submit" disabled={pending}>
-        {pending ? "กำลังเข้าสู่ระบบ…" : "เข้าสู่ระบบ"}
+        {pending ? "Signing in…" : "Sign in"}
       </button>
     </form>
   );

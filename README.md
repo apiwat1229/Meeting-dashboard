@@ -46,10 +46,8 @@ docker compose --env-file .env.production exec -T db sh -lc 'pg_dump -U "$POSTGR
 ```text
 src/
   app/                       Routes, root layout, server actions
-    settings/theme/          หน้าตั้งค่า Theme กลาง
   components/
     dashboard/               การ์ดสรุป ตาราง และกิจกรรม
-    theme/                   ฟอร์มตั้งค่าและ preview Theme
     ui/                      ปุ่ม การ์ด Badge และ Progress ที่ใช้ร่วมกัน
   db/                        Drizzle schema และ connection pool
   lib/                       data access, validation และ design tokens
@@ -60,13 +58,9 @@ compose.dev.yaml              สภาพแวดล้อมพัฒนา�
 compose.yaml                  สภาพแวดล้อม production สำหรับ server
 ```
 
-## Theme และมาตรฐาน UI
+## UI มาตรฐาน
 
-เปิด **Theme settings** ที่มุมบนของ Dashboard เพื่อปรับสีหลัก, สีพื้นหลังและสถานะ, font family, ขนาด, น้ำหนัก, line height และค่าระยะห่างได้จากจุดเดียว ระบบ preview ก่อนบันทึก และเก็บ Theme กลางไว้ใน `theme_settings` เพื่อให้ทุกหน้าใช้ค่าเดียวกัน
-
-บทบาทตัวอักษรแยกกันเป็น Header 1, Header 2, หัวข้อย่อย/Header 3, เนื้อหา, Caption และค่าตัวเลขสรุป แต่ละบทบาทกำหนด font family, size, weight และ line height แยกได้ ฟอนต์ Noto Sans Thai และ Sarabun รวมอยู่ใน bundle จึงไม่ต้องโหลดฟอนต์จากอินเทอร์เน็ต
-
-ค่าตั้งต้นและ validation อยู่ใน `src/lib/theme-default.json` และ `src/lib/theme.ts` ส่วน global CSS variables ถูกสร้างจาก config แล้วผูกที่ root layout ทุก component จึงควรใช้ class บทบาท เช่น `type-h1`, `type-h2`, `type-h3`, `type-body`, `type-caption` และ `type-metric` แทนการกำหนดขนาดตัวอักษรเฉพาะจุด
+ทุกหน้าของแอปใช้สี ฟอนต์ และระยะห่างตามค่ามาตรฐานใน `src/lib/theme-default.json` ซึ่งถูกผูกเป็น CSS variables ที่ root layout โดยตรง รูปแบบตัวอักษรใช้ class บทบาท เช่น `type-h1`, `type-h2`, `type-h3`, `type-body`, `type-caption` และ `type-metric` เพื่อให้หน้าตาสอดคล้องกันทั้งแอป ฟอนต์ Noto Sans Thai และ Sarabun รวมอยู่ใน bundle จึงไม่ต้องโหลดฟอนต์จากอินเทอร์เน็ต
 
 ## ฐานข้อมูลและการเพิ่ม migration
 

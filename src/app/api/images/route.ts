@@ -4,8 +4,9 @@ import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { activities, dashboardSettings, issues, mediaAttachments, networkServiceStatuses } from "@/db/schema";
-import { deleteStoredMedia, ensureUploadDirectory, getMediaExtension, hasValidMediaSignature, isVideoExtension, mediaPath } from "@/lib/image-uploads";
+import { ensureUploadDirectory, getMediaExtension, hasValidMediaSignature, isVideoExtension, mediaPath } from "@/lib/image-uploads";
 import { hasDashboardSession } from "@/lib/dashboard-auth";
+import { deleteMediaIfUnreferenced, isValidReportDate } from "@/lib/daily-reports";
 
 export const runtime = "nodejs";
 
@@ -19,28 +20,30 @@ function badRequest(message: string, status = 400) {
 function parseOwner(formData: FormData) {
   const entityType = formData.get("entityType");
   const entityIdValue = formData.get("entityId");
+  const reportDate = formData.get("reportDate");
+  if (!isValidReportDate(reportDate)) return null;
   if (entityType === "cctv") {
-    return entityIdValue === "default" ? { entityType, entityId: "default" } as const : null;
+    return entityIdValue === reportDate ? { entityType, entityId: reportDate, reportDate } as const : null;
   }
   const entityId = typeof entityIdValue === "string" ? Number(entityIdValue) : NaN;
   if ((entityType !== "issue" && entityType !== "activity" && entityType !== "networkService") || !Number.isSafeInteger(entityId) || entityId < 1) return null;
-  return { entityType, entityId } as const;
+  return { entityType, entityId, reportDate } as const;
 }
 
 async function ownerExists(owner: NonNullable<ReturnType<typeof parseOwner>>) {
   if (owner.entityType === "issue") {
-    const [row] = await db.select({ id: issues.id }).from(issues).where(eq(issues.id, owner.entityId)).limit(1);
+    const [row] = await db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, owner.entityId), eq(issues.reportDate, owner.reportDate))).limit(1);
     return Boolean(row);
   }
   if (owner.entityType === "networkService") {
-    const [row] = await db.select({ id: networkServiceStatuses.id }).from(networkServiceStatuses).where(eq(networkServiceStatuses.id, owner.entityId)).limit(1);
+    const [row] = await db.select({ id: networkServiceStatuses.id }).from(networkServiceStatuses).where(and(eq(networkServiceStatuses.id, owner.entityId), eq(networkServiceStatuses.reportDate, owner.reportDate))).limit(1);
     return Boolean(row);
   }
   if (owner.entityType === "cctv") {
-    const [row] = await db.select({ id: dashboardSettings.id }).from(dashboardSettings).where(eq(dashboardSettings.id, owner.entityId)).limit(1);
+    const [row] = await db.select({ id: dashboardSettings.id }).from(dashboardSettings).where(and(eq(dashboardSettings.id, owner.entityId), eq(dashboardSettings.reportDate, owner.reportDate))).limit(1);
     return Boolean(row);
   }
-  const [row] = await db.select({ id: activities.id }).from(activities).where(eq(activities.id, owner.entityId)).limit(1);
+  const [row] = await db.select({ id: activities.id }).from(activities).where(and(eq(activities.id, owner.entityId), eq(activities.reportDate, owner.reportDate))).limit(1);
   return Boolean(row);
 }
 
@@ -76,7 +79,7 @@ export async function POST(request: Request) {
     })();
     const [attachment] = await db.delete(mediaAttachments).where(conditions).returning({ url: mediaAttachments.url });
     if (!attachment) return badRequest("The media attachment could not be found.", 404);
-    await deleteStoredMedia(attachment.url).catch(() => undefined);
+    await deleteMediaIfUnreferenced(attachment.url);
     return NextResponse.json({ ok: true, attachmentId });
   }
 
@@ -114,7 +117,7 @@ export async function POST(request: Request) {
     if (!attachment) throw new Error("Could not create the media attachment.");
     return NextResponse.json({ ok: true, attachment });
   } catch {
-    await deleteStoredMedia(url).catch(() => undefined);
+    await deleteMediaIfUnreferenced(url);
     return badRequest("Could not save the media file.", 500);
   }
 }

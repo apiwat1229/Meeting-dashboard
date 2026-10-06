@@ -1,23 +1,24 @@
 "use client";
 
-import { startTransition, useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { getProjectChangeHistoryAction, updateProjectScheduleAction } from "@/app/actions";
-import { CalendarDays, History, ImagePlus, Trash2, X } from "lucide-react";
+import { getProjectChangeHistoryAction } from "@/app/actions";
+import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, History, ImagePlus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/components/ui/toast";
-import { ProjectDailyUpdatePicker, ProjectTaskManager } from "@/components/dashboard/project-subtasks";
-import { isSupportedMedia, mediaSizeLimit } from "@/components/dashboard/media-file-picker";
+import { currentReportDateKey, isSupportedMedia, mediaSizeLimit } from "@/components/dashboard/media-file-picker";
 
 type ImageEntityType = "issue" | "activity";
 
 export type MediaAttachmentData = { id: number; url: string };
+
+function isVideoAttachment(attachment: MediaAttachmentData) {
+  return /\.(mp4|webm)(?:\?.*)?$/i.test(attachment.url);
+}
 
 export function ImageAttachment({
   entityType,
@@ -34,10 +35,40 @@ export function ImageAttachment({
 }) {
   const [media, setMedia] = useState(initialMedia);
   const [pending, setPending] = useState(false);
-  const [previewImage, setPreviewImage] = useState<MediaAttachmentData | null>(null);
+  const [selectedMediaId, setSelectedMediaId] = useState<number | null>(initialMedia[0]?.id ?? null);
+  const [previewImageId, setPreviewImageId] = useState<number | null>(null);
   const router = useRouter();
 
-  useEffect(() => setMedia(initialMedia), [initialMedia]);
+  const selectedMediaIndex = Math.max(0, media.findIndex((item) => item.id === selectedMediaId));
+  const selectedMedia = media[selectedMediaIndex] ?? null;
+  const images = media.filter((item) => !isVideoAttachment(item));
+  const previewImageIndex = images.findIndex((item) => item.id === previewImageId);
+  const previewImage = previewImageIndex >= 0 ? images[previewImageIndex] : null;
+
+  // Synchronize optimistic local edits with server data returned by router.refresh().
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    setMedia(initialMedia);
+    setSelectedMediaId((current) => current !== null && initialMedia.some((item) => item.id === current)
+      ? current
+      : initialMedia[0]?.id ?? null);
+    setPreviewImageId((current) => current !== null && initialMedia.some((item) => item.id === current && !isVideoAttachment(item))
+      ? current
+      : null);
+  }, [initialMedia]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  function moveSelectedMedia(direction: -1 | 1) {
+    const nextMedia = media[selectedMediaIndex + direction];
+    if (nextMedia) setSelectedMediaId(nextMedia.id);
+  }
+
+  function movePreviewImage(direction: -1 | 1) {
+    const nextImage = images[previewImageIndex + direction];
+    if (!nextImage) return;
+    setPreviewImageId(nextImage.id);
+    setSelectedMediaId(nextImage.id);
+  }
 
   async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget;
@@ -58,6 +89,8 @@ export function ImageAttachment({
         const formData = new FormData();
         formData.set("entityType", entityType);
         formData.set("entityId", String(entityId));
+        const reportDate = currentReportDateKey();
+        if (reportDate) formData.set("reportDate", reportDate);
         formData.set("file", file);
         try {
           const response = await fetch("/api/images", { method: "POST", body: formData });
@@ -67,6 +100,7 @@ export function ImageAttachment({
           } else {
             uploaded += 1;
             setMedia((current) => [...current, result.attachment!]);
+            setSelectedMediaId(result.attachment!.id);
           }
         } catch {
           errors.push(`${file.name}: Could not save the media file.`);
@@ -84,6 +118,8 @@ export function ImageAttachment({
     const formData = new FormData();
     formData.set("entityType", entityType);
     formData.set("entityId", String(entityId));
+    const reportDate = currentReportDateKey();
+    if (reportDate) formData.set("reportDate", reportDate);
     formData.set("remove", "true");
     formData.set("attachmentId", String(attachment.id));
     setPending(true);
@@ -94,7 +130,13 @@ export function ImageAttachment({
         toast.error(result.message ?? "Could not remove the media file.");
         return;
       }
-      setMedia((current) => current.filter((item) => item.id !== attachment.id));
+      const removedIndex = media.findIndex((item) => item.id === attachment.id);
+      const nextMedia = media.filter((item) => item.id !== attachment.id);
+      setMedia(nextMedia);
+      if (selectedMediaId === attachment.id) {
+        setSelectedMediaId(nextMedia[Math.min(removedIndex, nextMedia.length - 1)]?.id ?? null);
+      }
+      if (previewImageId === attachment.id) setPreviewImageId(null);
       router.refresh();
       toast.success("Media removed.");
     } catch {
@@ -103,8 +145,6 @@ export function ImageAttachment({
       setPending(false);
     }
   }
-
-  const singleImage = media.length === 1 && !/\.(mp4|webm)(?:\?.*)?$/i.test(media[0]?.url ?? "");
 
   return (
     <section className="detail-image-section" aria-label="Media attachment">
@@ -121,41 +161,58 @@ export function ImageAttachment({
         )}
       </div>
       {media.length > 0 ? (
-        <div className={`media-gallery${singleImage ? " media-gallery-single" : ""}`}>
-          {media.map((attachment, index) => {
-            const isVideo = /\.(mp4|webm)(?:\?.*)?$/i.test(attachment.url);
-            return (
-              <article className="media-gallery-item" key={attachment.id}>
-                <div className="detail-image-frame">
-                  {isVideo
-                    ? <video className="activity-media-preview" src={attachment.url} controls playsInline preload="metadata" aria-label={`${alt}, video ${index + 1}`} />
-                    : <button type="button" className="media-image-trigger" onClick={() => setPreviewImage(attachment)} aria-label={`Open image ${index + 1} in large view`}>
-                      <Image src={attachment.url} alt={`${alt}, image ${index + 1}`} fill sizes="(max-width: 700px) 90vw, 560px" unoptimized />
-                    </button>}
-                </div>
-                {editable && <div className="media-gallery-actions"><span>{isVideo ? "Video" : "Image"} {index + 1}</span><Button type="button" variant="ghost" className="detail-image-remove" aria-label={`Remove media ${index + 1}`} onClick={() => { void removeMedia(attachment); }} disabled={pending}><Trash2 size={14} aria-hidden="true" /> Remove</Button></div>}
-              </article>
-            );
-          })}
-        </div>
+        <>
+          <div className={`media-carousel${media.length === 1 ? " media-carousel-single" : ""}`} role="group" aria-roledescription="carousel" aria-label="Media carousel">
+            {media.length > 1 && <button type="button" className="media-carousel-nav" onClick={() => moveSelectedMedia(-1)} disabled={selectedMediaIndex === 0} aria-label="Previous media"><ChevronLeft size={20} aria-hidden="true" /></button>}
+            {selectedMedia && (
+              <div className={`media-gallery media-carousel-gallery${media.length === 1 ? " media-gallery-single" : ""}`}>
+                <article className="media-gallery-item" key={selectedMedia.id}>
+                  <div className="detail-image-frame">
+                    {isVideoAttachment(selectedMedia)
+                      ? <video className="activity-media-preview" src={selectedMedia.url} controls playsInline preload="metadata" aria-label={`${alt}, video ${selectedMediaIndex + 1}`} />
+                      : <button type="button" className="media-image-trigger" onClick={() => setPreviewImageId(selectedMedia.id)} aria-label={`Open image ${images.findIndex((item) => item.id === selectedMedia.id) + 1} in large view`}>
+                        <Image src={selectedMedia.url} alt={`${alt}, image ${images.findIndex((item) => item.id === selectedMedia.id) + 1}`} fill sizes="(max-width: 700px) 90vw, 560px" unoptimized />
+                      </button>}
+                  </div>
+                  {editable && <div className="media-gallery-actions"><span>{isVideoAttachment(selectedMedia) ? "Video" : "Image"} {selectedMediaIndex + 1}</span><Button type="button" variant="ghost" className="detail-image-remove" aria-label={`Remove media ${selectedMediaIndex + 1}`} onClick={() => { void removeMedia(selectedMedia); }} disabled={pending}><Trash2 size={14} aria-hidden="true" /> Remove</Button></div>}
+                </article>
+              </div>
+            )}
+            {media.length > 1 && <button type="button" className="media-carousel-nav" onClick={() => moveSelectedMedia(1)} disabled={selectedMediaIndex === media.length - 1} aria-label="Next media"><ChevronRight size={20} aria-hidden="true" /></button>}
+          </div>
+          {media.length > 1 && <p className="media-carousel-count" aria-live="polite">{selectedMediaIndex + 1} / {media.length}</p>}
+        </>
       ) : (
         <p className="detail-image-empty">No media attached.</p>
       )}
       {editable && <p className="detail-image-help">Images: JPG, PNG, WebP, GIF (5 MB max each) · Videos: MP4, WebM (100 MB max each)</p>}
-      <Dialog open={previewImage !== null} onOpenChange={(open) => { if (!open) setPreviewImage(null); }}>
-        <DialogContent className="media-preview-dialog" onClick={(event) => event.stopPropagation()}>
+      <Dialog open={previewImage !== null} onOpenChange={(open) => { if (!open) setPreviewImageId(null); }}>
+        <DialogContent className="media-preview-dialog" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => {
+          if (event.key === "ArrowLeft") {
+            event.preventDefault();
+            movePreviewImage(-1);
+          } else if (event.key === "ArrowRight") {
+            event.preventDefault();
+            movePreviewImage(1);
+          }
+        }}>
           <div className="detail-dialog-header">
             <div>
               <DialogTitle>Image preview</DialogTitle>
-              <DialogDescription>Close the preview to return to the activity details.</DialogDescription>
+              <DialogDescription>{images.length > 1 ? "Use the arrows or left and right keys to move between images." : "Close the preview to return to the activity details."}</DialogDescription>
             </div>
             <DialogClose className="icon-button project-tasks-close" aria-label="Close image preview"><X size={17} /></DialogClose>
           </div>
           {previewImage && (
             <div className="media-preview-frame">
-              <Image src={previewImage.url} alt={alt} fill sizes="(max-width: 700px) 94vw, 1200px" unoptimized />
+              <Image src={previewImage.url} alt={`${alt}, image ${previewImageIndex + 1} of ${images.length}`} fill sizes="(max-width: 700px) 94vw, 1200px" unoptimized />
+              {images.length > 1 && <>
+                <button type="button" className="media-preview-nav media-preview-nav-previous" onClick={() => movePreviewImage(-1)} disabled={previewImageIndex === 0} aria-label="Previous image"><ChevronLeft size={24} aria-hidden="true" /></button>
+                <button type="button" className="media-preview-nav media-preview-nav-next" onClick={() => movePreviewImage(1)} disabled={previewImageIndex === images.length - 1} aria-label="Next image"><ChevronRight size={24} aria-hidden="true" /></button>
+              </>}
             </div>
           )}
+          {images.length > 1 && <p className="media-preview-count" aria-live="polite">Image {previewImageIndex + 1} of {images.length}</p>}
         </DialogContent>
       </Dialog>
     </section>
@@ -220,53 +277,95 @@ export function IssueDetailsDialog({ issue, open, onOpenChange }: { issue: Issue
 type ActivityDetails = {
   id: number;
   content: string;
-  severity: "HIGH" | "MEDIUM";
+  description: string;
   completed: boolean;
-  activityDate: string;
+  progress: number;
+  startDate: string | null;
+  finishDate: string | null;
+  supplierRequired: boolean;
+  supplierName: string | null;
+  supplierPhone: string | null;
   media: MediaAttachmentData[];
 };
 
 type RelatedIssue = { id: number; title: string; severity: "HIGH" | "MEDIUM" | "LOW"; state: "OPEN" | "CLOSED" };
 
-function formatActivityDate(dateKey: string) {
+function formatActivityDate(dateKey: string | null) {
+  if (!dateKey) return "—";
   const date = new Date(`${dateKey}T00:00:00Z`);
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(date);
 }
 
 export function ActivityDetailsDialog({ activity, relatedIssues, open, onOpenChange }: { activity: ActivityDetails; relatedIssues: RelatedIssue[]; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const activityStatusLabel = activity.completed ? "Done" : "In progress";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="detail-dialog-content activity-details-dialog" onClick={(event) => event.stopPropagation()}>
-        <div className="detail-dialog-header">
-          <div>
-            <DialogTitle>{activity.content}</DialogTitle>
+      <DialogContent className="detail-dialog-content activity-details-dialog project-details-dialog" onClick={(event) => event.stopPropagation()}>
+        <div className="detail-dialog-header project-detail-header activity-project-detail-header">
+          <div className="project-detail-header-copy">
+            <div className="project-detail-title-row">
+              <DialogTitle>{activity.content}</DialogTitle>
+              <Badge variant={activity.completed ? "success" : "info"}>{activityStatusLabel}</Badge>
+            </div>
+            <DialogDescription>Activity overview</DialogDescription>
           </div>
           <DialogClose className="icon-button project-tasks-close" aria-label="Close activity details"><X size={17} /></DialogClose>
         </div>
-        <div className="activity-detail-meta" aria-label="Activity information">
-          <section className="activity-detail-meta-item">
-            <span className="activity-detail-meta-label">Status</span>
-            <div className="activity-detail-meta-value activity-detail-badges">
-              <Badge className="activity-detail-status-badge" variant="success">{activity.completed ? "Done" : "On schedule"}</Badge>
-            </div>
-          </section>
-          {!activity.completed && (
-            <section className="activity-detail-meta-item">
-              <span className="activity-detail-meta-label">Priority</span>
-              <div className="activity-detail-meta-value activity-detail-badges">
-                <Badge variant={activity.severity === "HIGH" ? "danger" : "warning"}>{activity.severity === "HIGH" ? "High" : "Medium"}</Badge>
+        <section className="activity-schedule" aria-label="Activity schedule">
+          <div className="activity-schedule-card activity-schedule-start">
+            <span className="activity-schedule-label"><CalendarDays size={17} aria-hidden="true" /> Start date</span>
+            <strong>{activity.startDate ? formatActivityDate(activity.startDate) : "Not set"}</strong>
+            <span className="activity-schedule-note">{activity.startDate ? "Activity begins" : "No start date entered"}</span>
+          </div>
+          <ArrowRight className="activity-schedule-flow" size={22} aria-hidden="true" />
+          <div className="activity-schedule-card activity-schedule-finish">
+            <span className="activity-schedule-label"><CalendarDays size={17} aria-hidden="true" /> Finish date</span>
+            <strong>{activity.finishDate ? formatActivityDate(activity.finishDate) : "Not set"}</strong>
+            <span className="activity-schedule-note">{activity.finishDate ? "Target completion" : "No finish date entered"}</span>
+          </div>
+        </section>
+        <section className="detail-copy-section project-detail-progress" aria-label="Activity progress">
+          <div className="project-detail-progress-heading">
+            <div className="project-detail-progress-label"><h3>Progress</h3></div>
+            <strong>{activity.progress}%</strong>
+          </div>
+          <Progress value={activity.progress} tone={activity.completed ? "finish" : "success"} />
+        </section>
+        <section className="detail-copy-section project-timeline-section" aria-label={`${activity.content} timeline`}>
+          <div className="project-timeline-heading">
+            <div><h3>Activity timeline</h3><span>1 step</span></div>
+          </div>
+          <ol className="project-timeline-list">
+            <li className={`project-timeline-step project-timeline-step-${activity.completed ? "done" : "in_progress"}`}>
+              <span className="project-timeline-marker" aria-hidden="true">{activity.completed ? "✓" : "1"}</span>
+              <div className="project-timeline-step-card">
+                <div className="project-timeline-step-heading">
+                  <strong>{activity.content}</strong>
+                  <span className={`project-task-status-text project-task-status-${activity.completed ? "done" : "in_progress"}`}>{activityStatusLabel}</span>
+                </div>
+                <p>
+                  <span>{activity.startDate ? formatActivityDate(activity.startDate) : "Start date not set"}</span>
+                  <span aria-hidden="true">→</span>
+                  <span>{activity.finishDate ? formatActivityDate(activity.finishDate) : "Finish date not set"}</span>
+                </p>
               </div>
-            </section>
-          )}
-          <section className="activity-detail-meta-item">
-            <span className="activity-detail-meta-label">Date</span>
-            <strong className="activity-detail-meta-value">{formatActivityDate(activity.activityDate)}</strong>
-          </section>
-        </div>
+            </li>
+          </ol>
+        </section>
         <section className="detail-copy-section activity-detail-copy">
           <h3>Description</h3>
-          <p>{activity.content || "No description provided."}</p>
+          <p>{activity.description || "No description provided."}</p>
         </section>
+        {activity.supplierRequired && (
+          <section className="detail-copy-section supplier-detail-section">
+            <h3>Supplier</h3>
+            <dl className="supplier-detail-grid">
+              <div><dt>Supplier name</dt><dd>{activity.supplierName || "—"}</dd></div>
+              {activity.supplierPhone && <div><dt>Phone</dt><dd>{activity.supplierPhone}</dd></div>}
+            </dl>
+          </section>
+        )}
         {relatedIssues.length > 0 && (
           <section className="detail-copy-section related-issue-section">
             <h3>Related issues</h3>
@@ -293,8 +392,6 @@ type ProjectDetails = {
   name: string;
   status: "ON_TRACK" | "ATTENTION" | "DELAY" | "FINISH";
   progress: number;
-  yesterday: string;
-  today: string;
   startDate: string | null;
   endDate: string | null;
   tasks: Array<{
@@ -323,24 +420,6 @@ function formatProjectDate(dateKey: string) {
   }).format(new Date(`${dateKey}T00:00:00Z`));
 }
 
-function projectDateFromKey(dateKey: string) {
-  return new Date(`${dateKey}T12:00:00.000Z`);
-}
-
-function projectDateKeyFromDate(date: Date) {
-  const values = Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Bangkok",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-      .formatToParts(date)
-      .map((part) => [part.type, part.value]),
-  );
-  return `${values.year}-${values.month}-${values.day}`;
-}
-
 function projectDateLabel(project: Pick<ProjectDetails, "startDate" | "endDate">) {
   const parts = [
     project.startDate ? `Start Date: ${formatProjectDate(project.startDate)}` : "",
@@ -348,157 +427,6 @@ function projectDateLabel(project: Pick<ProjectDetails, "startDate" | "endDate">
   ].filter(Boolean);
   if (parts.length === 0) return "Start Date: not set · End Date: not set";
   return parts.join(" · ");
-}
-
-function ScheduleDatePicker({
-  label,
-  dateKey,
-  otherDateKey,
-  disabled,
-  onSelect,
-}: {
-  label: "Start" | "End";
-  dateKey: string;
-  otherDateKey: string;
-  disabled: boolean;
-  onSelect: (dateKey: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const selectedDate = dateKey ? projectDateFromKey(dateKey) : undefined;
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        type="button"
-        className="button button-secondary project-date-picker-trigger"
-        aria-label={`Choose project ${label.toLowerCase()} date`}
-        disabled={disabled}
-      >
-        <CalendarDays size={13} aria-hidden="true" />
-        <span className="project-date-picker-label">{label}</span>
-        <span>{dateKey ? formatProjectDate(dateKey) : "Select date"}</span>
-      </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        positionerClassName="project-date-popover-positioner"
-        className="date-picker-popover project-date-popover"
-      >
-        <Calendar
-          mode="single"
-          selected={selectedDate}
-          onSelect={(date) => {
-            if (!date) return;
-            onSelect(projectDateKeyFromDate(date));
-            setOpen(false);
-          }}
-          disabled={(date) => {
-            const dateKeyValue = projectDateKeyFromDate(date);
-            return label === "Start"
-              ? Boolean(otherDateKey && dateKeyValue > otherDateKey)
-              : Boolean(otherDateKey && dateKeyValue < otherDateKey);
-          }}
-          timeZone="Asia/Bangkok"
-          captionLayout="label"
-          className="report-calendar"
-        />
-        {dateKey && (
-          <div className="project-date-popover-footer">
-            <Button type="button" variant="ghost" onClick={() => { onSelect(""); setOpen(false); }}>Clear date</Button>
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function ProjectSchedulePicker({ projectId, startDate, endDate }: { projectId: number; startDate: string | null; endDate: string | null }) {
-  const [dates, setDates] = useState({ startDate: startDate ?? "", endDate: endDate ?? "" });
-  const [pending, setPending] = useState(false);
-  const [pendingChange, setPendingChange] = useState<{ field: "startDate" | "endDate"; value: string } | null>(null);
-
-  useEffect(() => setDates({ startDate: startDate ?? "", endDate: endDate ?? "" }), [projectId, startDate, endDate]);
-
-  async function saveDateChange() {
-    if (!pendingChange) return;
-    const { field, value } = pendingChange;
-    const next = { ...dates, [field]: value };
-    setPending(true);
-
-    const formData = new FormData();
-    formData.set("id", String(projectId));
-    formData.set("startDate", next.startDate);
-    formData.set("endDate", next.endDate);
-
-    try {
-      const result = await updateProjectScheduleAction(formData);
-      if (result.ok) {
-        setDates(next);
-        setPendingChange(null);
-        toast.success(result.message);
-      } else {
-        toast.error(result.message);
-      }
-    } catch {
-      toast.error("Could not update the project dates.");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  function requestDateChange(field: "startDate" | "endDate", value: string) {
-    if (dates[field] === value) return;
-    setPendingChange({ field, value });
-  }
-
-  const pendingFieldLabel = pendingChange?.field === "startDate" ? "Start date" : "End date";
-  const previousDate = pendingChange ? dates[pendingChange.field] : "";
-
-  return (
-    <>
-      <div className="project-date-range" aria-label={projectDateLabel({ startDate: dates.startDate || null, endDate: dates.endDate || null })}>
-        <ScheduleDatePicker
-          label="Start"
-          dateKey={dates.startDate}
-          otherDateKey={dates.endDate}
-          disabled={pending}
-          onSelect={(value) => requestDateChange("startDate", value)}
-        />
-        <ScheduleDatePicker
-          label="End"
-          dateKey={dates.endDate}
-          otherDateKey={dates.startDate}
-          disabled={pending}
-          onSelect={(value) => requestDateChange("endDate", value)}
-        />
-      </div>
-      <Dialog open={Boolean(pendingChange)} onOpenChange={(open) => { if (!open && !pending) setPendingChange(null); }}>
-        <DialogContent className="detail-dialog-content project-date-confirm-dialog" onClick={(event) => event.stopPropagation()}>
-          <div className="detail-dialog-header">
-            <div>
-              <DialogTitle>Confirm date change</DialogTitle>
-              <DialogDescription>Review this project schedule update before saving.</DialogDescription>
-            </div>
-            <DialogClose className="icon-button project-tasks-close" aria-label="Close confirmation" disabled={pending}><X size={17} /></DialogClose>
-          </div>
-          {pendingChange && (
-            <div className="project-date-confirm-change">
-              <strong>{pendingFieldLabel}</strong>
-              <div className="project-date-confirm-values">
-                <div><span>Current date</span><p>{previousDate ? formatProjectDate(previousDate) : "Not set"}</p></div>
-                <span className="project-date-confirm-arrow" aria-hidden="true">→</span>
-                <div><span>New date</span><p>{pendingChange.value ? formatProjectDate(pendingChange.value) : "Not set"}</p></div>
-              </div>
-              <p className="project-date-confirm-note">This change will be saved in the project history. You can review it from History.</p>
-            </div>
-          )}
-          <div className="project-date-confirm-actions">
-            <Button type="button" variant="secondary" disabled={pending} onClick={() => setPendingChange(null)}>Cancel</Button>
-            <Button type="button" disabled={pending} onClick={() => { void saveDateChange(); }}>{pending ? "Saving…" : "Confirm date change"}</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
 }
 
 type ProjectHistoryEntry = {
@@ -591,6 +519,8 @@ export function ProjectDetailsDialog({ project, open, onOpenChange }: { project:
   const status = projectStatusInfo[project.status];
   const completedTasks = project.tasks.filter((task) => task.status === "DONE").length;
   const [historyOpen, setHistoryOpen] = useState(false);
+  const projectStatusLabel = ({ ON_TRACK: "In progress", ATTENTION: "Needs attention", DELAY: "Delayed", FINISH: "Complete" } as const)[project.status];
+  const taskStatusLabel = { TODO: "To do", IN_PROGRESS: "In progress", DONE: "Done" } as const;
 
   return (
     <>
@@ -600,15 +530,19 @@ export function ProjectDetailsDialog({ project, open, onOpenChange }: { project:
             <div className="project-detail-header-copy">
               <div className="project-detail-title-row">
                 <DialogTitle>{project.name}</DialogTitle>
+                <Badge variant={project.status === "DELAY" ? "danger" : project.status === "ATTENTION" ? "warning" : project.status === "FINISH" ? "success" : "info"}>{projectStatusLabel}</Badge>
               </div>
             </div>
             <div className="project-detail-meta">
-              <ProjectSchedulePicker projectId={project.id} startDate={project.startDate} endDate={project.endDate} />
               <Button type="button" variant="secondary" className="project-history-trigger" onClick={() => setHistoryOpen(true)}>
                 <History size={16} aria-hidden="true" /> History
               </Button>
             </div>
             <DialogClose className="icon-button project-tasks-close" aria-label="Close project details"><X size={17} /></DialogClose>
+          </div>
+          <div className="project-timeline-date-range" aria-label={projectDateLabel(project)}>
+            <div><span><CalendarDays size={14} aria-hidden="true" /> Start</span><strong>{project.startDate ? formatProjectDate(project.startDate) : "Not set"}</strong></div>
+            <div><span><CalendarDays size={14} aria-hidden="true" /> End</span><strong>{project.endDate ? formatProjectDate(project.endDate) : "Not set"}</strong></div>
           </div>
           <section className="detail-copy-section project-detail-progress">
             <div className="project-detail-progress-heading">
@@ -620,17 +554,36 @@ export function ProjectDetailsDialog({ project, open, onOpenChange }: { project:
             </div>
             <Progress value={project.progress} tone={status.fill} />
           </section>
-          <div className="project-detail-updates">
-            <section className="project-daily-update-display" aria-label="Yesterday">
-              <span className="project-detail-update-title">Yesterday</span>
-              <ProjectDailyUpdatePicker projectId={project.id} field="yesterday" title="Yesterday" value={project.yesterday} tasks={project.tasks} />
-            </section>
-            <section className="project-daily-update-display" aria-label="Today">
-              <span className="project-detail-update-title">Today</span>
-              <ProjectDailyUpdatePicker projectId={project.id} field="today" title="Today" value={project.today} tasks={project.tasks} />
-            </section>
-          </div>
-          <ProjectTaskManager projectId={project.id} projectName={project.name} tasks={project.tasks} />
+          <section className="detail-copy-section project-timeline-section" aria-label={`${project.name} timeline`}>
+            <div className="project-timeline-heading">
+              <div>
+                <h3>Project timeline</h3>
+                <span>{project.tasks.length} {project.tasks.length === 1 ? "step" : "steps"}</span>
+              </div>
+            </div>
+            {project.tasks.length > 0 ? (
+              <ol className="project-timeline-list">
+                {project.tasks.map((task, index) => (
+                  <li className={`project-timeline-step project-timeline-step-${task.status.toLowerCase()}`} key={task.id}>
+                    <span className="project-timeline-marker" aria-hidden="true">{task.status === "DONE" ? "✓" : index + 1}</span>
+                    <div className="project-timeline-step-card">
+                      <div className="project-timeline-step-heading">
+                        <strong>{task.title}</strong>
+                        <span className={`project-task-status-text project-task-status-${task.status.toLowerCase()}`}>{taskStatusLabel[task.status]}</span>
+                      </div>
+                      <p>
+                        <span>{task.startDate ? formatProjectDate(task.startDate) : "Start date not set"}</span>
+                        <span aria-hidden="true">→</span>
+                        <span>{task.endDate ? formatProjectDate(task.endDate) : "End date not set"}</span>
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="project-timeline-empty">No timeline steps yet. Add steps from Edit project.</p>
+            )}
+          </section>
         </DialogContent>
       </Dialog>
       <ProjectHistoryDialog projectId={project.id} open={historyOpen} onOpenChange={setHistoryOpen} />

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Film, ImagePlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
+import { getBangkokDateKey } from "@/lib/date-key";
 
 const acceptedImages = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const acceptedVideos = new Set(["video/mp4", "video/webm"]);
@@ -17,6 +18,10 @@ export function mediaSizeLimit(file: File) {
   return (acceptedVideos.has(file.type) ? 100 : 5) * 1024 * 1024;
 }
 
+export function currentReportDateKey() {
+  return new URL(window.location.href).searchParams.get("date") ?? getBangkokDateKey();
+}
+
 export function MediaFilePicker({
   files,
   pending,
@@ -24,6 +29,7 @@ export function MediaFilePicker({
   className = "",
   frameClassName = "",
   label = "Media",
+  imagesOnly = false,
 }: {
   files: File[];
   pending: boolean;
@@ -31,6 +37,7 @@ export function MediaFilePicker({
   className?: string;
   frameClassName?: string;
   label?: string;
+  imagesOnly?: boolean;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -40,10 +47,11 @@ export function MediaFilePicker({
     input.value = "";
     if (selectedFiles.length === 0) return;
 
-    const supportedFiles = selectedFiles.filter((file) => isSupportedMedia(file) && file.size > 0 && file.size <= mediaSizeLimit(file));
-    const hasInvalidType = selectedFiles.some((file) => !isSupportedMedia(file));
+    const supported = (file: File) => imagesOnly ? acceptedImages.has(file.type) : isSupportedMedia(file);
+    const supportedFiles = selectedFiles.filter((file) => supported(file) && file.size > 0 && file.size <= mediaSizeLimit(file));
+    const hasInvalidType = selectedFiles.some((file) => !supported(file));
     const hasInvalidSize = selectedFiles.some((file) => isSupportedMedia(file) && (file.size < 1 || file.size > mediaSizeLimit(file)));
-    if (hasInvalidType) toast.error("Use JPG, PNG, WebP, or GIF images, or MP4 or WebM videos.");
+    if (hasInvalidType) toast.error(imagesOnly ? "Use JPG, PNG, WebP, or GIF images." : "Use JPG, PNG, WebP, or GIF images, or MP4 or WebM videos.");
     if (hasInvalidSize) toast.error("Images must be under 5 MB and videos under 100 MB.");
     if (supportedFiles.length === 0) return;
 
@@ -70,7 +78,7 @@ export function MediaFilePicker({
             ref={fileInput}
             className="detail-image-input"
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+            accept={imagesOnly ? "image/jpeg,image/png,image/webp,image/gif" : "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"}
             aria-label="Upload images or videos"
             multiple
             onChange={handleFileChange}
@@ -89,7 +97,9 @@ export function MediaFilePicker({
           ))}
         </div>
       ) : <p className="detail-image-empty">No media attached.</p>}
-      <p className="detail-image-help">Images: JPG, PNG, WebP, GIF (5 MB max each) · Videos: MP4, WebM (100 MB max each)</p>
+      <p className="detail-image-help">
+        {imagesOnly ? "Images: JPG, PNG, WebP, GIF (5 MB max each)" : "Images: JPG, PNG, WebP, GIF (5 MB max each) · Videos: MP4, WebM (100 MB max each)"}
+      </p>
     </section>
   );
 }
@@ -126,6 +136,8 @@ export async function uploadMediaFiles(entityType: "issue" | "activity" | "netwo
     const formData = new FormData();
     formData.set("entityType", entityType);
     formData.set("entityId", String(entityId));
+    const reportDate = currentReportDateKey();
+    if (reportDate) formData.set("reportDate", reportDate);
     formData.set("file", file);
     try {
       const response = await fetch("/api/images", { method: "POST", body: formData });

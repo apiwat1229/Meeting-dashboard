@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CalendarDays, ChevronDown, ListTodo, Plus, X } from "lucide-react";
+import { CalendarDays, ChevronDown, ListTodo, Pencil, Plus, Trash2, X } from "lucide-react";
 import { createProjectTaskAction, deleteProjectTaskAction, updateProjectDailyAction, updateProjectTaskAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -33,6 +33,33 @@ function dailyUpdateTaskIds(value: string, tasks: Array<Pick<ProjectTask, "id" |
     const id = matches?.shift();
     return id === undefined ? [] : [String(id)];
   });
+}
+
+export function ProjectDailyUpdateDisplay({ projectName, title, value }: { projectName: string; title: "Yesterday" | "Today"; value: string }) {
+  const lines = value.split(/\r?\n/).filter(Boolean);
+
+  return (
+    <div className="project-daily-update-picker">
+      <button
+        type="button"
+        className="project-daily-update-picker-trigger project-daily-update-display-trigger"
+        aria-label={`Open full details for ${projectName}. ${title} task: ${value || "No subtasks selected"}`}
+      >
+        {lines.length > 0 ? (
+          <span className="project-daily-update-picker-text">
+            {lines.map((label, lineIndex) => (
+              <span className="project-daily-update-picker-line" key={`${lineIndex}-${label}`}>
+                <span aria-hidden="true">-</span>
+                <span className="project-daily-update-picker-label">{label}</span>
+              </span>
+            ))}
+          </span>
+        ) : (
+          <span className="project-daily-update-picker-placeholder">No subtasks selected — click to view project details</span>
+        )}
+      </button>
+    </div>
+  );
 }
 
 export function ProjectDailyUpdatePicker({
@@ -103,7 +130,7 @@ export function ProjectDailyUpdatePicker({
         value={selectedTaskIds}
         onValueChange={setSelectedTaskIds}
         ariaLabel={`Select subtasks for ${title.toLowerCase()}`}
-        placeholder={tasks.length > 0 ? "Choose subtasks" : "No subtasks available"}
+        placeholder={tasks.length > 0 ? "No subtasks selected — click to choose" : "No subtasks available"}
         searchPlaceholder={`Search ${title.toLowerCase()} subtasks`}
         emptyMessage="No subtasks found."
         disabled={tasks.length === 0}
@@ -122,7 +149,7 @@ export function ProjectDailyUpdatePicker({
               ))}
             </span>
           ) : (
-            <span className="project-daily-update-picker-placeholder">{tasks.length > 0 ? "Choose subtasks" : "No update recorded."}</span>
+            <span className="project-daily-update-picker-placeholder">{tasks.length > 0 ? "No subtasks selected — click to choose" : "No subtasks available."}</span>
           );
         }}
         className="project-daily-update-picker-trigger"
@@ -264,8 +291,8 @@ export function ProjectTaskManager({
       } else {
         toast.error(result.message);
       }
-    } catch {
-      toast.error("Could not add the subtask.");
+      } catch {
+      toast.error("Could not add the timeline step.");
     } finally {
       setPending(false);
     }
@@ -282,7 +309,7 @@ export function ProjectTaskManager({
         toast.error(result.message);
       }
     } catch {
-      toast.error("Could not update the subtask.");
+      toast.error("Could not update the timeline step.");
     } finally {
       setPending(false);
     }
@@ -302,7 +329,7 @@ export function ProjectTaskManager({
         toast.error(result.message);
       }
     } catch {
-      toast.error("Could not delete the subtask.");
+      toast.error("Could not delete the timeline step.");
     } finally {
       setPending(false);
       setDeleteTask(null);
@@ -310,25 +337,25 @@ export function ProjectTaskManager({
   }
 
   return (
-    <section className="detail-copy-section project-detail-task-section" aria-label={`${projectName} subtasks`}>
+    <section className="detail-copy-section project-detail-task-section" aria-label={`${projectName} timeline steps`}>
       <div className="project-task-manager-heading">
         <div>
-          <h3>Subtasks</h3>
-          <span className="type-caption">{tasks.length} {tasks.length === 1 ? "task" : "tasks"}</span>
+          <h3>Timeline steps</h3>
+          <span className="type-caption">{tasks.length} {tasks.length === 1 ? "step" : "steps"}</span>
         </div>
         <Button type="button" variant="secondary" className="project-task-add-trigger" onClick={() => { setEditingTask(null); setShowCreate((value) => !value); }}>
           {showCreate ? <X size={15} /> : <Plus size={15} />}
-          {showCreate ? "Cancel" : "Add task"}
+          {showCreate ? "Cancel" : "Add step"}
         </Button>
       </div>
 
       {showCreate && (
         <form action={createTask} className="project-task-form">
-          <label className="field-label">Task name<Input ref={newTaskTitleRef} name="title" minLength={2} maxLength={220} required autoFocus placeholder="Enter a subtask" value={newTaskTitle} onChange={(event) => setNewTaskTitle(event.currentTarget.value)} /></label>
+          <label className="field-label">Step name<Input ref={newTaskTitleRef} name="title" minLength={2} maxLength={220} required autoFocus placeholder="Enter a timeline step" value={newTaskTitle} onChange={(event) => setNewTaskTitle(event.currentTarget.value)} /></label>
           <label className="field-label">Status<ComboboxSelect name="status" options={statusOptions} value={newTaskStatus} onValueChange={(value) => { if (value === "TODO" || value === "IN_PROGRESS" || value === "DONE") setNewTaskStatus(value); }} /></label>
           <TaskDatePicker label="Start date" name="startDate" value={newTaskStartDate} onChange={setNewTaskStartDate} />
           <TaskDatePicker label="End date" name="endDate" value={newTaskEndDate} onChange={setNewTaskEndDate} />
-          <Button type="submit" disabled={pending}><Plus size={15} /> {pending ? "Saving…" : "Save task"}</Button>
+          <Button type="submit" disabled={pending}><Plus size={15} /> {pending ? "Saving…" : "Save step"}</Button>
         </form>
       )}
 
@@ -337,27 +364,28 @@ export function ProjectTaskManager({
           as="div"
           className="project-task-empty-context"
           role="group"
-          ariaLabel={`${projectName} subtasks`}
+          ariaLabel={`${projectName} timeline steps`}
           onCreate={() => setShowCreate(true)}
-          createLabel="Add subtask"
+          createLabel="Add timeline step"
         >
           <Empty className="project-task-empty">
             <EmptyMedia variant="icon"><ListTodo size={18} /></EmptyMedia>
             <EmptyHeader>
-              <EmptyTitle>No subtasks yet</EmptyTitle>
-              <EmptyDescription>Add tasks to break this project into smaller steps.</EmptyDescription>
+            <EmptyTitle>No timeline steps yet</EmptyTitle>
+            <EmptyDescription>Add steps to build the project timeline.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         </ContextMenu>
       ) : (
         <div className="project-task-list">
-          <table className="project-task-table" aria-label={`${projectName} subtasks`}>
+          <table className="project-task-table" aria-label={`${projectName} timeline steps`}>
             <thead>
               <tr>
-                <th scope="col">Subtask</th>
+                <th scope="col">Step</th>
                 <th scope="col">Start</th>
                 <th scope="col">End</th>
                 <th scope="col">Status</th>
+                <th scope="col" className="project-task-actions-heading">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -367,17 +395,17 @@ export function ProjectTaskManager({
                     as="tr"
                     className="project-task-item"
                     role="row"
-                    ariaLabel={`Subtask ${task.title}`}
+                    ariaLabel={`Timeline step ${task.title}`}
                     key={task.id}
                     onEdit={() => { setShowCreate(false); setDeleteTask(null); setEditingTask(task); }}
                     onDelete={() => { setShowCreate(false); setEditingTask(null); setDeleteTask(task); }}
                   >
                     {editingTask?.id === task.id ? (
-                      <td colSpan={4} className="project-task-edit-cell">
+                      <td colSpan={5} className="project-task-edit-cell">
                         <form className="project-task-form project-task-edit-form" onSubmit={(event) => { event.preventDefault(); void saveTask(new FormData(event.currentTarget)); }}>
                           <input type="hidden" name="id" value={task.id} />
                           <input type="hidden" name="projectId" value={projectId} />
-                          <label className="field-label">Task name<Input name="title" minLength={2} maxLength={220} required defaultValue={task.title} /></label>
+                          <label className="field-label">Step name<Input name="title" minLength={2} maxLength={220} required defaultValue={task.title} /></label>
                           <label className="field-label">Status<ComboboxSelect name="status" options={statusOptions} defaultValue={task.status} /></label>
                           <TaskDatePicker
                             label="Start date"
@@ -405,7 +433,7 @@ export function ProjectTaskManager({
                         <td className="project-task-status-cell">
                           {deleteTask?.id === task.id ? (
                             <div className="project-task-delete-confirm">
-                              <span className="type-caption">Delete task?</span>
+                              <span className="type-caption">Delete this step?</span>
                               <Button type="button" variant="secondary" disabled={pending} onClick={() => setDeleteTask(null)}>Cancel</Button>
                               <Button type="button" variant="danger" disabled={pending} onClick={() => { void removeTask(task); }}>{pending ? "Deleting…" : "Delete"}</Button>
                             </div>
@@ -413,6 +441,42 @@ export function ProjectTaskManager({
                             <span className={`project-task-status-text project-task-status-${task.status.toLowerCase()}`}>
                               {taskStatusLabel[task.status]}
                             </span>
+                          )}
+                        </td>
+                        <td className="project-task-actions-cell">
+                          {deleteTask?.id !== task.id && (
+                            <div className="project-task-row-actions">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="icon-button project-task-row-action"
+                                aria-label={`Edit timeline step ${task.title}`}
+                                title="Edit step"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setShowCreate(false);
+                                  setDeleteTask(null);
+                                  setEditingTask(task);
+                                }}
+                              >
+                                <Pencil size={15} aria-hidden="true" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="icon-button project-task-row-action project-task-row-action-delete"
+                                aria-label={`Delete timeline step ${task.title}`}
+                                title="Delete step"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setShowCreate(false);
+                                  setEditingTask(null);
+                                  setDeleteTask(task);
+                                }}
+                              >
+                                <Trash2 size={15} aria-hidden="true" />
+                              </Button>
+                            </div>
                           )}
                         </td>
                       </>

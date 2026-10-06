@@ -1,16 +1,29 @@
 import type { CSSProperties } from "react";
-import type { FontFamily, ThemeConfig, TypographyRole } from "@/lib/theme-schema";
 import defaultThemeData from "@/lib/theme-default.json";
 
-export type { FontFamily, ThemeConfig, TypographyRole } from "@/lib/theme-schema";
-
-export const fontFamilyOptions = [
-  { value: "noto", label: "Noto Sans Thai" },
-  { value: "sarabun", label: "Sarabun" },
-  { value: "system", label: "System UI" },
-  { value: "serif", label: "Serif" },
-  { value: "mono", label: "Monospace" },
-] as const;
+export type FontFamily = "noto" | "sarabun" | "system" | "serif" | "mono";
+export type TypographyRole = "h1" | "h2" | "h3" | "body" | "caption" | "metric";
+export type ThemeConfig = {
+  colors: {
+    canvas: string;
+    panel: string;
+    panelAlt: string;
+    ink: string;
+    muted: string;
+    border: string;
+    navy: string;
+    primary: string;
+    success: string;
+    successSoft: string;
+    warning: string;
+    warningSoft: string;
+    danger: string;
+    dangerSoft: string;
+    infoSoft: string;
+  };
+  typography: Record<TypographyRole, { family: FontFamily; size: number; weight: string; lineHeight: number }>;
+  layout: { radius: number; gap: number; cardPadding: number; maxWidth: number };
+};
 
 export const defaultTheme = defaultThemeData as unknown as ThemeConfig;
 
@@ -53,12 +66,4 @@ export function themeCssVariables(theme: ThemeConfig): CSSProperties {
   }
 
   return variables as CSSProperties;
-}
-
-export function applyThemeToDocument(theme: ThemeConfig) {
-  if (typeof document === "undefined") return;
-  const variables = themeCssVariables(theme) as Record<string, string>;
-  for (const [name, value] of Object.entries(variables)) {
-    document.documentElement.style.setProperty(name, value);
-  }
 }
