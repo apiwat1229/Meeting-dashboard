@@ -2,7 +2,7 @@
 
 import { Progress as ProgressPrimitive } from "@base-ui/react/progress";
 
-export function Progress({ value, tone = "success" }: { value: number; tone?: "success" | "warning" | "danger" | "finish" }) {
+export function Progress({ value, tone = "success" }: { value: number; tone?: "success" | "warning" | "danger" | "finish" | "rescheduled" }) {
   const safeValue = Math.min(100, Math.max(0, value));
   return (
     <ProgressPrimitive.Root

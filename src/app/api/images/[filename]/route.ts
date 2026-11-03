@@ -2,18 +2,43 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
+import { and, eq, or, sql } from "drizzle-orm";
+import { db } from "@/db";
+import { mediaAttachments } from "@/db/schema";
 import { isStoredMediaName, mediaMimeByExtension, mediaPath, type MediaExtension } from "@/lib/image-uploads";
 import { hasDashboardSession } from "@/lib/dashboard-auth";
+import { getRequestedDashboardContext } from "@/lib/daily-reports";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request, { params }: { params: Promise<{ filename: string }> }) {
   if (!(await hasDashboardSession())) return NextResponse.json({ message: "Authentication required." }, { status: 401 });
 
+  let departmentId: number;
+  try {
+    ({ departmentId } = await getRequestedDashboardContext());
+  } catch {
+    return NextResponse.json({ message: "Department access could not be verified." }, { status: 403 });
+  }
+
   const { filename } = await params;
   if (!isStoredMediaName(filename)) {
     return NextResponse.json({ message: "Media not found." }, { status: 404 });
   }
+
+  const mediaUrl = `/api/images/${filename}`;
+  const [reference] = await db.select({ id: mediaAttachments.id }).from(mediaAttachments)
+    .where(and(
+      eq(mediaAttachments.url, mediaUrl),
+      or(
+        sql`${mediaAttachments.issueId} IN (SELECT id FROM issues WHERE department_id = ${departmentId})`,
+        sql`${mediaAttachments.activityId} IN (SELECT id FROM activities WHERE department_id = ${departmentId})`,
+        sql`${mediaAttachments.networkServiceId} IN (SELECT id FROM network_service_statuses WHERE department_id = ${departmentId})`,
+        sql`${mediaAttachments.dashboardSettingsId} IN (SELECT id FROM dashboard_settings WHERE department_id = ${departmentId})`,
+        sql`${mediaAttachments.cctvMeetingCaseId} IN (SELECT id FROM cctv_meeting_cases WHERE department_id = ${departmentId})`,
+      ),
+    )).limit(1);
+  if (!reference) return NextResponse.json({ message: "Media not found." }, { status: 404 });
 
   try {
     const filePath = mediaPath(filename);

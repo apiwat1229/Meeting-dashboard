@@ -1,12 +1,16 @@
 import {
   ArrowLeft,
+  Building2,
   CircleAlert,
   CirclePlay,
   Flag,
   FolderKanban,
   ListTodo,
   LogOut,
+  Users,
 } from "lucide-react";
+import Link from "next/link";
+import type { ReactNode } from "react";
 import { logoutAction } from "@/app/auth-actions";
 import type { getDashboardData } from "@/lib/data";
 import { Card } from "@/components/ui/card";
@@ -20,22 +24,15 @@ import { FullScreenToggle } from "@/components/dashboard/full-screen-toggle";
 import { TodayFocus } from "@/components/dashboard/today-focus";
 import { SystemStatusPanel } from "@/components/dashboard/system-status";
 import { ProjectDailyUpdateDisplay } from "@/components/dashboard/project-subtasks";
+import { ProjectScheduleDate } from "@/components/dashboard/project-schedule-date";
 import { dashboardSectionNumbers } from "@/lib/dashboard-section-numbers";
+import type { DepartmentSummary } from "@/lib/dashboard-scope";
+import { formatProjectDate } from "@/lib/project-dates";
 
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
 type ProjectStatus = DashboardData["projects"][number]["status"];
 type IssueRow = DashboardData["issues"][number];
-
-function formatProjectDate(dateKey: string) {
-  const formattedDate = new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(`${dateKey}T00:00:00Z`));
-
-  return formattedDate.replaceAll(" ", "-");
-}
+type ProjectDateChange = DashboardData["projectDateChanges"][number];
 
 function projectProgressTone(status: ProjectStatus): "success" | "warning" | "danger" | "info" {
   if (status === "DELAY") return "danger";
@@ -54,7 +51,7 @@ function SummaryBreakdown({
   label,
   columns = 3,
 }: {
-  items: Array<{ value: string | number; label: string; tone: "neutral" | "success" | "warning" | "danger"; title?: string; detail?: string }>;
+  items: Array<{ value: string | number; label: string; tone: "neutral" | "success" | "warning" | "danger" | "rescheduled"; title?: string; detail?: string }>;
   label: string;
   columns?: 2 | 3 | 4;
 }) {
@@ -72,9 +69,17 @@ function SummaryBreakdown({
   );
 }
 
-function ProjectRow({ project, tasks, index }: { project: DashboardData["projects"][number]; tasks: DashboardData["projectTasks"]; index: number }) {
+function ProjectRow({ project, tasks, index, dateChanges }: { project: DashboardData["projects"][number]; tasks: DashboardData["projectTasks"]; index: number; dateChanges: ProjectDateChange[] }) {
   const startDateLabel = project.startDate ? formatProjectDate(project.startDate) : "—";
   const endDateLabel = project.endDate ? formatProjectDate(project.endDate) : "—";
+  const isRescheduled = project.isRescheduled;
+  const scheduleLabel = project.status === "DELAY"
+      ? "Delayed"
+      : project.status === "ATTENTION"
+        ? "Needs attention"
+        : project.status === "FINISH"
+          ? "Complete"
+          : "On schedule";
 
   return (
     <ProjectEditor project={project} tasks={tasks}>
@@ -92,22 +97,27 @@ function ProjectRow({ project, tasks, index }: { project: DashboardData["project
           role="group"
           aria-label={`Start date: ${project.startDate ? startDateLabel : "not set"}; End date: ${project.endDate ? endDateLabel : "not set"}`}
         >
-          <span className="project-schedule-date" title="Start date">
-            <CirclePlay className="project-schedule-icon" aria-hidden="true" />
-            {project.startDate ? <time dateTime={project.startDate}>{startDateLabel}</time> : <span>—</span>}
-          </span>
-          <span className="project-schedule-date" title="End date">
-            <Flag className="project-schedule-icon" aria-hidden="true" />
-            {project.endDate ? <time dateTime={project.endDate}>{endDateLabel}</time> : <span>—</span>}
-          </span>
+          <ProjectScheduleDate
+            dateKey={project.startDate}
+            changes={dateChanges.filter((change) => change.field === "startDate")}
+            label="Start"
+            icon="start"
+          />
+          <ProjectScheduleDate
+            dateKey={project.endDate}
+            changes={dateChanges.filter((change) => change.field === "endDate")}
+            label="Finish"
+            icon="finish"
+          />
         </div>
       </td>
       <td>
         <div className="project-progress-cell">
-          <span className={`project-progress-indicator status-${projectProgressTone(project.status)}`} aria-label={`Progress ${project.progress}%`}>
+          <span className={`project-progress-indicator status-${projectProgressTone(project.status)}`} aria-label={`${scheduleLabel}${isRescheduled ? "; schedule revised" : ""}; progress ${project.progress}%`} title={scheduleLabel}>
             <span className="project-progress-dot" aria-hidden="true" />
             <span>{project.progress}%</span>
           </span>
+          {isRescheduled && <span className="project-reschedule-badge" title="The project schedule has changed">Rescheduled</span>}
         </div>
       </td>
     </ProjectEditor>
@@ -115,9 +125,10 @@ function ProjectRow({ project, tasks, index }: { project: DashboardData["project
 }
 
 function ProjectSection({ data }: { data: DashboardData }) {
+  const completedCount = data.projects.filter((project) => project.status === "FINISH" || project.progress >= 100).length;
+  const activeProjectCount = data.projects.length - completedCount;
   const delayCount = data.projects.filter((project) => project.status === "DELAY").length;
-  const finishCount = data.projects.filter((project) => project.status === "FINISH").length;
-  const inProgressCount = data.projects.length - delayCount - finishCount;
+  const inProgressCount = activeProjectCount - delayCount;
 
   return (
     <ProjectCreateProvider>
@@ -130,10 +141,10 @@ function ProjectSection({ data }: { data: DashboardData }) {
           </div>
           <div className="project-status-summary">
             <SummaryBreakdown
-              label={`${data.projects.length} Projects, ${delayCount} Delayed, ${inProgressCount} Ongoing`}
+              label={`${activeProjectCount} Projects, ${delayCount} Delayed, ${inProgressCount} Ongoing`}
               columns={3}
               items={[
-                { value: data.projects.length, label: "Projects", tone: "neutral" },
+                { value: activeProjectCount, label: "Projects", tone: "neutral" },
                 { value: delayCount, label: "Delayed", tone: "danger" },
                 { value: inProgressCount, label: "Ongoing", tone: "success" },
               ]}
@@ -141,6 +152,7 @@ function ProjectSection({ data }: { data: DashboardData }) {
           </div>
           <div className="project-legend" role="group" aria-label="Project status legend">
             <span className="project-legend-item"><span className="project-legend-swatch legend-in-progress" aria-hidden="true" />On schedule</span>
+            <span className="project-legend-item"><span className="project-legend-swatch legend-rescheduled" aria-hidden="true" />Rescheduled</span>
             <span className="project-legend-item"><span className="project-legend-swatch legend-delay" aria-hidden="true" />Delayed</span>
             <span className="project-legend-item"><span className="project-legend-swatch legend-finish" aria-hidden="true" />Early</span>
           </div>
@@ -168,6 +180,7 @@ function ProjectSection({ data }: { data: DashboardData }) {
                   project={project}
                   tasks={data.projectTasks.filter((task) => task.projectId === project.id)}
                   index={index}
+                  dateChanges={data.projectDateChanges.filter((change) => change.projectSeriesId === project.projectSeriesId)}
                 />
               ))}
               {data.projects.length === 0 && (
@@ -279,7 +292,19 @@ function ActivitySection({
   );
 }
 
-export function Dashboard({ data }: { data: DashboardData }) {
+export function Dashboard({
+  data,
+  isAdministrator,
+  currentDepartmentCode,
+  currentDepartmentName,
+  availableDepartments,
+}: {
+  data: DashboardData;
+  isAdministrator: boolean;
+  currentDepartmentCode: string;
+  currentDepartmentName: string;
+  availableDepartments: DepartmentSummary[];
+}) {
   const reportDateKey = data.reportDateKey;
   const focusProjectOptions = data.projects.map((project) => ({
     id: project.id,
@@ -295,13 +320,28 @@ export function Dashboard({ data }: { data: DashboardData }) {
   return (
     <main className="page-shell">
       <DailyRefresh initialDateKey={reportDateKey} />
-      <section className="dashboard-frame" aria-label="IT morning dashboard">
+      <section className="dashboard-frame" aria-label={`${currentDepartmentName} daily operations dashboard`}>
         <header className="dashboard-topbar">
           <div className="dashboard-name">
-            <h2 className="type-h2">IT Daily Status &amp; Operations Summary</h2>
+            <h2 className="type-h2">{currentDepartmentName} Daily Status &amp; Operations Summary</h2>
           </div>
           <div className="report-meta type-caption">
-            <ReportDatePicker initialDateKey={reportDateKey} />
+            {isAdministrator && availableDepartments.length > 1 && (
+              <form className="dashboard-department-switcher" action="/" method="get">
+                <input type="hidden" name="date" value={reportDateKey} />
+                <label htmlFor="dashboard-department"><Building2 size={15} aria-hidden="true" /><span className="sr-only">Department</span></label>
+                <select id="dashboard-department" name="department" defaultValue={currentDepartmentCode} aria-label="Choose department">
+                  {availableDepartments.map((department) => <option key={department.id} value={department.code}>{department.name}</option>)}
+                </select>
+                <button className="button button-secondary" type="submit">Open</button>
+              </form>
+            )}
+            <ReportDatePicker initialDateKey={reportDateKey} departmentCode={currentDepartmentCode} />
+            {isAdministrator && (
+              <Link className="button button-secondary dashboard-admin-link" href="/admin/users" title="Manage users and departments">
+                <Users size={17} aria-hidden="true" /><span>Users</span>
+              </Link>
+            )}
             <FullScreenToggle />
             <form action={logoutAction}>
               <button className="button button-secondary dashboard-logout-button" type="submit" title="Log out" aria-label="Log out">
@@ -312,8 +352,11 @@ export function Dashboard({ data }: { data: DashboardData }) {
         </header>
 
         <div className="dashboard-content">
-          <section className="main-grid" aria-label="Active Projects and Today’s Focus">
+          <section className="main-grid" aria-label="Active Projects">
             <ProjectSection data={data} />
+          </section>
+
+          <section className="activity-grid" aria-label="Today’s focus and daily activities">
             <Card className="content-card today-focus-card">
               <TodayFocus
                 projects={focusProjectOptions}
@@ -321,11 +364,11 @@ export function Dashboard({ data }: { data: DashboardData }) {
                 selectedTaskIds={selectedFocusTaskIds}
               />
             </Card>
-          </section>
-
-          <section className="activity-grid" aria-label="Activities and system status">
             <ActivitySection section="TODAY" title="Today Activities" data={data} />
             <ActivitySection section="YESTERDAY" title="Yesterday Activities" data={data} />
+          </section>
+
+          <section className="dashboard-lower-grid" aria-label="System status">
             <SystemStatusPanel
               reportDateKey={data.reportDateKey}
               networkServices={data.networkServices}
@@ -338,6 +381,8 @@ export function Dashboard({ data }: { data: DashboardData }) {
                 cameraInstallingCount: data.settings.cameraInstallingCount,
                 recorderItems: data.settings.cctvRecorderItems,
                 meetings: data.settings.cctvMeetings,
+                meetingVisible: data.settings.cctvMeetingVisible,
+                meetingCases: data.cctvMeetingCases,
                 media: data.cctvMedia,
               }}
             />

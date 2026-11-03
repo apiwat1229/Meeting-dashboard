@@ -26,7 +26,12 @@ function DialogContent({ className = "", onClick, onContextMenu, ...props }: Pop
         onClick={(event) => event.stopPropagation()}
         onContextMenu={(event) => event.stopPropagation()}
       />
-      <DialogPrimitive.Viewport data-slot="dialog-viewport" className="dialog-viewport">
+      <DialogPrimitive.Viewport
+        data-slot="dialog-viewport"
+        className="dialog-viewport"
+        onClick={(event) => event.stopPropagation()}
+        onContextMenu={(event) => event.stopPropagation()}
+      >
         <DialogPrimitive.Popup
           data-slot="dialog-content"
           className={`dialog-content ${className}`.trim()}

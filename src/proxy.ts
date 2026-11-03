@@ -16,7 +16,7 @@ export function proxy(request: NextRequest) {
   }
 
   const session = verifyDashboardSession(request.cookies.get(getDashboardSessionCookieName())?.value);
-  const isLoginRoute = request.nextUrl.pathname === "/login";
+  const isLoginRoute = request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/admin/login";
 
   if (!session && !isLoginRoute) {
     if (request.nextUrl.pathname.startsWith("/api/")) {

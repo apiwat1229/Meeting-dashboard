@@ -43,7 +43,7 @@ function formatDate(date: Date) {
   return `${values.day} ${values.month?.replace(".", "")} ${values.year}`;
 }
 
-export function ReportDatePicker({ initialDateKey }: { initialDateKey: string }) {
+export function ReportDatePicker({ initialDateKey, departmentCode }: { initialDateKey: string; departmentCode: string }) {
   const router = useRouter();
   const [dateKey, setDateKey] = useState(initialDateKey);
   const [open, setOpen] = useState(false);
@@ -72,7 +72,7 @@ export function ReportDatePicker({ initialDateKey }: { initialDateKey: string })
             const nextDateKey = dateKeyFromDate(date);
             setDateKey(nextDateKey);
             setOpen(false);
-            router.push(`/?date=${nextDateKey}`, { scroll: false });
+            router.push(`/dashboard/${encodeURIComponent(departmentCode)}?date=${nextDateKey}`, { scroll: false });
           }}
           disabled={{ after: dateFromKey(getBangkokDateKey()) }}
           timeZone="Asia/Bangkok"

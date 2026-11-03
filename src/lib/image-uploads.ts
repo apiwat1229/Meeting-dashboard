@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 export const mediaMimeByExtension = {
   jpg: "image/jpeg",
+  jpeg: "image/jpeg",
   png: "image/png",
   webp: "image/webp",
   gif: "image/gif",
@@ -11,10 +12,10 @@ export const mediaMimeByExtension = {
 } as const;
 
 export type MediaExtension = keyof typeof mediaMimeByExtension;
-export type ImageExtension = Extract<MediaExtension, "jpg" | "png" | "webp" | "gif">;
+export type ImageExtension = Extract<MediaExtension, "jpg" | "jpeg" | "png" | "webp" | "gif">;
 export type VideoExtension = Extract<MediaExtension, "mp4" | "webm">;
 
-const storedMediaPattern = /^[0-9a-f-]{36}\.(jpg|png|webp|gif|mp4|webm)$/i;
+const storedMediaPattern = /^[0-9a-f-]{36}\.(jpg|jpeg|png|webp|gif|mp4|webm)$/i;
 
 export function getUploadDirectory() {
   return process.env.UPLOAD_DIR || join(process.cwd(), "uploads");

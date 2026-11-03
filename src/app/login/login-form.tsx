@@ -5,11 +5,12 @@ import { loginAction, type LoginState } from "@/app/auth-actions";
 
 const initialState: LoginState = { error: "" };
 
-export function LoginForm() {
+export function LoginForm({ administratorOnly = false }: { administratorOnly?: boolean }) {
   const [state, action, pending] = useActionState(loginAction, initialState);
 
   return (
     <form className="login-form" action={action}>
+      {administratorOnly && <input type="hidden" name="intent" value="admin" />}
       <label htmlFor="username">Username</label>
       <input id="username" name="username" type="text" autoComplete="username" required autoFocus />
 

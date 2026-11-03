@@ -6,6 +6,18 @@ export type CctvMeeting = {
   members: string;
 };
 
+export type CctvMeetingCaseStatus = "READY" | "IN_PROGRESS" | "FOLLOW_UP";
+
+export type CctvMeetingCase = {
+  id: string;
+  title: string;
+  detail: string;
+  meetingDate: string | null;
+  status: CctvMeetingCaseStatus;
+  sortOrder: number;
+  media: CctvMediaAttachment[];
+};
+
 export type CctvMediaAttachment = { id: number; url: string };
 
 export type CctvRecorderItem = {

@@ -14,7 +14,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   await connection();
 
   return (
-    <html lang="th" style={themeCssVariables(defaultTheme)}>
+    <html lang="th" style={{ ...themeCssVariables(defaultTheme), colorScheme: "light" }}>
       <body><ToastProvider>{children}</ToastProvider></body>
     </html>
   );

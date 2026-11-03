@@ -1,8 +1,10 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import pg from "pg";
+import { loadLocalEnv } from "./load-local-env.mjs";
 
 const { Client } = pg;
+await loadLocalEnv();
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {

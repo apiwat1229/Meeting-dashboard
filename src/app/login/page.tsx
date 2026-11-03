@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LoginForm } from "@/app/login/login-form";
 
 export default function LoginPage() {
@@ -7,6 +8,7 @@ export default function LoginPage() {
         <h1 id="login-title">Sign in to Dashboard</h1>
         <p className="login-description">Sign in to view and manage daily operations.</p>
         <LoginForm />
+        <Link className="login-admin-link" href="/admin/login">Administrator sign in</Link>
       </section>
     </main>
   );

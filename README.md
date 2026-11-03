@@ -12,11 +12,13 @@ docker compose -f compose.dev.yaml up --build
 
 เปิด `http://localhost:3000` ข้อมูลตัวอย่างจะถูกสร้างให้อัตโนมัติในฐานข้อมูลพัฒนา PostgreSQL เก็บข้อมูลใน named volume และเปิดให้เครื่องนี้เชื่อมต่อผ่าน `127.0.0.1:5437` สำหรับกรณีรัน Next.js ด้วย `npm run dev` นอก Docker
 
+การเปิดใช้ล็อกอินในเครื่อง ให้ตั้ง `DASHBOARD_SESSION_SECRET` แบบสุ่มอย่างน้อย 32 ตัวอักษรใน `.env.local` แล้วสร้างผู้ดูแลครั้งแรกโดยกำหนด `INITIAL_ADMIN_PASSWORD` ชั่วคราวให้ process ที่รัน `npm run db:bootstrap-admin` สคริปต์อ่าน `DATABASE_URL` จาก `.env.local` ได้เมื่อรันบนเครื่อง และจาก environment ของ container เมื่อรันผ่าน Docker ผู้ใช้และรหัสผ่านจะถูกเก็บในฐานข้อมูล โดยรหัสผ่านบันทึกเป็น scrypt hash หากต้องการตั้งรหัสผ่านผู้ดูแลใหม่ ให้รันคำสั่ง bootstrap ซ้ำด้วยรหัสผ่านใหม่
+
 หยุด container ด้วย `Ctrl+C` แล้วสั่ง `docker compose -f compose.dev.yaml down` ได้ ข้อมูลฐานข้อมูลยังอยู่ใน volume เดิม หากต้องการลบฐานข้อมูลพัฒนาทิ้งทั้งหมด ให้ใช้ `docker compose -f compose.dev.yaml down -v`
 
 ## เตรียม deploy บน Docker Server
 
-1. คัดลอก `.env.production.example` เป็น `.env.production` แล้วตั้งรหัสผ่าน PostgreSQL ที่เดายาก โดยให้ค่าใน `DATABASE_URL` ตรงกับ `POSTGRES_USER`, `POSTGRES_PASSWORD` และ `POSTGRES_DB` ตั้ง `DASHBOARD_USERNAME`, `DASHBOARD_PASSWORD` และ `DASHBOARD_SESSION_SECRET` ด้วย โดยรหัส Dashboard ต้องแยกจากรหัสเซิร์ฟเวอร์ และ session secret ควรสุ่มอย่างน้อย 32 ตัวอักษร
+1. คัดลอก `.env.production.example` เป็น `.env.production` แล้วตั้งรหัสผ่าน PostgreSQL ที่เดายาก โดยให้ค่าใน `DATABASE_URL` ตรงกับ `POSTGRES_USER`, `POSTGRES_PASSWORD` และ `POSTGRES_DB` ตั้ง `DASHBOARD_SESSION_SECRET` ให้สุ่มอย่างน้อย 32 ตัวอักษรด้วย
 2. ส่ง source code ไปยัง Docker Server แล้วรันคำสั่งนี้สำหรับการติดตั้งครั้งแรก:
 
 ```sh
@@ -24,6 +26,8 @@ docker compose --env-file .env.production up -d --build
 ```
 
 Compose จะ build production image, รอ PostgreSQL พร้อมใช้งาน, ใช้ migration ที่ยังไม่เคยรัน และเริ่ม Next.js จาก standalone build หน้า Dashboard อ่านข้อมูลโปรเจกต์ งานย่อย กิจกรรม และสถานะระบบจาก PostgreSQL ผ่าน Drizzle ORM
+
+หลังเริ่มระบบครั้งแรก ให้กำหนด `INITIAL_ADMIN_PASSWORD` ชั่วคราวใน shell แล้วส่งให้คำสั่ง `docker compose --env-file .env.production exec -e INITIAL_ADMIN_PASSWORD app npm run db:bootstrap-admin` ก่อนเข้าใช้งาน หน้า Dashboard จึงจะเปิดให้ล็อกอินได้ บัญชีเริ่มต้นจะอยู่ในแผนก IT และผู้ดูแลสามารถเพิ่มผู้ใช้กับแผนกอื่นได้จากหน้า Users อย่าเก็บรหัสผ่านเริ่มต้นไว้ใน `.env.production`
 
 เมื่อฐานข้อมูล production ทำงานอยู่แล้วและต้องการ deploy เฉพาะโค้ด ให้ build และอัปเดตเฉพาะ app service:
 
@@ -49,10 +53,10 @@ src/
   components/
     dashboard/               การ์ดสรุป ตาราง และกิจกรรม
     ui/                      ปุ่ม การ์ด Badge และ Progress ที่ใช้ร่วมกัน
-  db/                        Drizzle schema และ connection pool
+  db/                        Drizzle schema และ connection pool รวมผู้ใช้และแผนก
   lib/                       data access, validation และ design tokens
 db/migrations/               SQL migrations ที่เพิ่มตามลำดับ
-scripts/                     รัน migrations และ seed ข้อมูลพัฒนา
+scripts/                     migrations, ข้อมูลพัฒนา และ bootstrap ผู้ดูแล
 Dockerfile                   Development และ production image
 compose.dev.yaml              สภาพแวดล้อมพัฒนาพร้อม hot reload
 compose.yaml                  สภาพแวดล้อม production สำหรับ server

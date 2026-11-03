@@ -129,13 +129,19 @@ function MediaFilePreview({ file, pending, onRemove }: { file: File; pending: bo
   );
 }
 
-export async function uploadMediaFiles(entityType: "issue" | "activity" | "networkService" | "cctv", entityId: number | string, files: File[]) {
+export async function uploadMediaFiles(
+  entityType: "issue" | "activity" | "networkService" | "cctv",
+  entityId: number | string,
+  files: File[],
+  activityPhase?: "BEFORE" | "AFTER",
+) {
   const failed: Array<{ fileName: string; message: string }> = [];
   let uploaded = 0;
   for (const file of files) {
     const formData = new FormData();
     formData.set("entityType", entityType);
     formData.set("entityId", String(entityId));
+    if (activityPhase) formData.set("activityPhase", activityPhase);
     const reportDate = currentReportDateKey();
     if (reportDate) formData.set("reportDate", reportDate);
     formData.set("file", file);

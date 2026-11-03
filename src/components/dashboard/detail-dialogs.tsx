@@ -3,11 +3,12 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { getProjectChangeHistoryAction } from "@/app/actions";
-import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, History, ImagePlus, Trash2, X } from "lucide-react";
+import { getProjectDateHistoryAction } from "@/app/actions";
+import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, ImagePlus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/components/ui/toast";
 import { currentReportDateKey, isSupportedMedia, mediaSizeLimit } from "@/components/dashboard/media-file-picker";
@@ -26,17 +27,30 @@ export function ImageAttachment({
   initialMedia,
   alt,
   editable = false,
+  allowUpload = true,
+  label = "Media",
+  activityPhase = "GENERAL",
+  comparisonMedia,
+  showHeading = true,
+  onPreviewOpen,
 }: {
   entityType: ImageEntityType;
   entityId: number;
   initialMedia: MediaAttachmentData[];
   alt: string;
   editable?: boolean;
+  allowUpload?: boolean;
+  label?: string;
+  activityPhase?: "GENERAL" | "BEFORE" | "AFTER";
+  comparisonMedia?: MediaAttachmentData[];
+  showHeading?: boolean;
+  onPreviewOpen?: (imageIndex: number) => void;
 }) {
   const [media, setMedia] = useState(initialMedia);
   const [pending, setPending] = useState(false);
   const [selectedMediaId, setSelectedMediaId] = useState<number | null>(initialMedia[0]?.id ?? null);
   const [previewImageId, setPreviewImageId] = useState<number | null>(null);
+  const [previewPairIndex, setPreviewPairIndex] = useState(0);
   const router = useRouter();
 
   const selectedMediaIndex = Math.max(0, media.findIndex((item) => item.id === selectedMediaId));
@@ -44,6 +58,14 @@ export function ImageAttachment({
   const images = media.filter((item) => !isVideoAttachment(item));
   const previewImageIndex = images.findIndex((item) => item.id === previewImageId);
   const previewImage = previewImageIndex >= 0 ? images[previewImageIndex] : null;
+  const comparisonImages = (comparisonMedia ?? []).filter((item) => !isVideoAttachment(item));
+  const comparisonPairCount = Math.max(images.length, comparisonImages.length);
+  const comparisonBeforeImage = activityPhase === "BEFORE"
+    ? images[previewPairIndex] ?? null
+    : comparisonImages[previewPairIndex] ?? null;
+  const comparisonAfterImage = activityPhase === "AFTER"
+    ? images[previewPairIndex] ?? null
+    : comparisonImages[previewPairIndex] ?? null;
 
   // Synchronize optimistic local edits with server data returned by router.refresh().
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -64,6 +86,16 @@ export function ImageAttachment({
   }
 
   function movePreviewImage(direction: -1 | 1) {
+    if (comparisonMedia !== undefined) {
+      const nextPairIndex = Math.min(Math.max(previewPairIndex + direction, 0), comparisonPairCount - 1);
+      setPreviewPairIndex(nextPairIndex);
+      const nextOwnImage = images[nextPairIndex];
+      if (nextOwnImage) {
+        setPreviewImageId(nextOwnImage.id);
+        setSelectedMediaId(nextOwnImage.id);
+      }
+      return;
+    }
     const nextImage = images[previewImageIndex + direction];
     if (!nextImage) return;
     setPreviewImageId(nextImage.id);
@@ -89,6 +121,7 @@ export function ImageAttachment({
         const formData = new FormData();
         formData.set("entityType", entityType);
         formData.set("entityId", String(entityId));
+        if (entityType === "activity") formData.set("activityPhase", activityPhase);
         const reportDate = currentReportDateKey();
         if (reportDate) formData.set("reportDate", reportDate);
         formData.set("file", file);
@@ -147,10 +180,10 @@ export function ImageAttachment({
   }
 
   return (
-    <section className="detail-image-section" aria-label="Media attachment">
-      <div className="detail-image-heading">
-        <h3>Media</h3>
-        {editable && (
+    <section className="detail-image-section" aria-label={`${label} attachment`}>
+      {(showHeading || (editable && allowUpload)) && <div className="detail-image-heading">
+        {showHeading && <h3>{label}</h3>}
+        {editable && allowUpload && (
           <div className="detail-image-actions">
             <label className="button button-secondary" aria-disabled={pending} onClick={(event) => { if (pending) event.preventDefault(); }}>
               <ImagePlus size={15} aria-hidden="true" />
@@ -159,7 +192,7 @@ export function ImageAttachment({
             </label>
           </div>
         )}
-      </div>
+      </div>}
       {media.length > 0 ? (
         <>
           <div className={`media-carousel${media.length === 1 ? " media-carousel-single" : ""}`} role="group" aria-roledescription="carousel" aria-label="Media carousel">
@@ -170,7 +203,15 @@ export function ImageAttachment({
                   <div className="detail-image-frame">
                     {isVideoAttachment(selectedMedia)
                       ? <video className="activity-media-preview" src={selectedMedia.url} controls playsInline preload="metadata" aria-label={`${alt}, video ${selectedMediaIndex + 1}`} />
-                      : <button type="button" className="media-image-trigger" onClick={() => setPreviewImageId(selectedMedia.id)} aria-label={`Open image ${images.findIndex((item) => item.id === selectedMedia.id) + 1} in large view`}>
+                      : <button type="button" className="media-image-trigger" onClick={() => {
+                        const imageIndex = images.findIndex((item) => item.id === selectedMedia.id);
+                        if (onPreviewOpen) {
+                          onPreviewOpen(imageIndex);
+                          return;
+                        }
+                        setPreviewImageId(selectedMedia.id);
+                        if (comparisonMedia !== undefined) setPreviewPairIndex(Math.max(0, imageIndex));
+                      }} aria-label={`Open image ${images.findIndex((item) => item.id === selectedMedia.id) + 1} in large view`}>
                         <Image src={selectedMedia.url} alt={`${alt}, image ${images.findIndex((item) => item.id === selectedMedia.id) + 1}`} fill sizes="(max-width: 700px) 90vw, 560px" unoptimized />
                       </button>}
                   </div>
@@ -183,11 +224,21 @@ export function ImageAttachment({
           {media.length > 1 && <p className="media-carousel-count" aria-live="polite">{selectedMediaIndex + 1} / {media.length}</p>}
         </>
       ) : (
-        <p className="detail-image-empty">No media attached.</p>
+        editable ? (
+          <p className="detail-image-empty">No media attached.</p>
+        ) : (
+          <Empty className="detail-image-empty-state">
+            <EmptyMedia variant="icon"><ImagePlus size={17} aria-hidden="true" /></EmptyMedia>
+            <EmptyHeader>
+              <EmptyTitle>No media attached</EmptyTitle>
+              <EmptyDescription>Images and videos attached to this item will appear here.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        )
       )}
-      {editable && <p className="detail-image-help">Images: JPG, PNG, WebP, GIF (5 MB max each) · Videos: MP4, WebM (100 MB max each)</p>}
-      <Dialog open={previewImage !== null} onOpenChange={(open) => { if (!open) setPreviewImageId(null); }}>
-        <DialogContent className="media-preview-dialog" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => {
+      {editable && allowUpload && <p className="detail-image-help">Images: JPG, PNG, WebP, GIF (5 MB max each) · Videos: MP4, WebM (100 MB max each)</p>}
+      {!onPreviewOpen && <Dialog open={previewImage !== null} disablePointerDismissal onOpenChange={(open) => { if (!open) setPreviewImageId(null); }}>
+        <DialogContent className={`media-preview-dialog${comparisonMedia !== undefined ? " media-comparison-preview-dialog" : ""}`} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => {
           if (event.key === "ArrowLeft") {
             event.preventDefault();
             movePreviewImage(-1);
@@ -198,12 +249,42 @@ export function ImageAttachment({
         }}>
           <div className="detail-dialog-header">
             <div>
-              <DialogTitle>Image preview</DialogTitle>
-              <DialogDescription>{images.length > 1 ? "Use the arrows or left and right keys to move between images." : "Close the preview to return to the activity details."}</DialogDescription>
+              <DialogTitle>{comparisonMedia !== undefined ? "Before & After comparison" : "Image preview"}</DialogTitle>
+              <DialogDescription>{comparisonMedia !== undefined
+                ? "Compare both stages side by side. Use the arrows or left and right keys to move through the image pairs."
+                : images.length > 1 ? "Use the arrows or left and right keys to move between images." : "Close the preview to return to the activity details."}</DialogDescription>
             </div>
             <DialogClose className="icon-button project-tasks-close" aria-label="Close image preview"><X size={17} /></DialogClose>
           </div>
-          {previewImage && (
+          {comparisonMedia !== undefined && previewImage ? (
+            <>
+              <div className="media-comparison-preview-grid">
+                <section className="media-comparison-preview-panel">
+                  <h3>Before</h3>
+                  {comparisonBeforeImage ? (
+                    <div className="media-comparison-preview-frame">
+                      <Image src={comparisonBeforeImage.url} alt={`${alt}, before image ${previewPairIndex + 1}`} fill sizes="(max-width: 760px) 94vw, 48vw" unoptimized />
+                    </div>
+                  ) : <p className="media-comparison-preview-empty">No Before image at this position.</p>}
+                </section>
+                <section className="media-comparison-preview-panel">
+                  <h3>After</h3>
+                  {comparisonAfterImage ? (
+                    <div className="media-comparison-preview-frame">
+                      <Image src={comparisonAfterImage.url} alt={`${alt}, after image ${previewPairIndex + 1}`} fill sizes="(max-width: 760px) 94vw, 48vw" unoptimized />
+                    </div>
+                  ) : <p className="media-comparison-preview-empty">No After image at this position.</p>}
+                </section>
+              </div>
+              {comparisonPairCount > 1 && (
+                <div className="media-comparison-preview-controls">
+                  <button type="button" className="media-comparison-preview-step" onClick={() => movePreviewImage(-1)} disabled={previewPairIndex === 0} aria-label="Previous image pair"><ChevronLeft size={20} aria-hidden="true" /></button>
+                  <p aria-live="polite">Pair {previewPairIndex + 1} of {comparisonPairCount}</p>
+                  <button type="button" className="media-comparison-preview-step" onClick={() => movePreviewImage(1)} disabled={previewPairIndex >= comparisonPairCount - 1} aria-label="Next image pair"><ChevronRight size={20} aria-hidden="true" /></button>
+                </div>
+              )}
+            </>
+          ) : previewImage && (
             <div className="media-preview-frame">
               <Image src={previewImage.url} alt={`${alt}, image ${previewImageIndex + 1} of ${images.length}`} fill sizes="(max-width: 700px) 94vw, 1200px" unoptimized />
               {images.length > 1 && <>
@@ -212,9 +293,9 @@ export function ImageAttachment({
               </>}
             </div>
           )}
-          {images.length > 1 && <p className="media-preview-count" aria-live="polite">Image {previewImageIndex + 1} of {images.length}</p>}
+          {comparisonMedia === undefined && images.length > 1 && <p className="media-preview-count" aria-live="polite">Image {previewImageIndex + 1} of {images.length}</p>}
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </section>
   );
 }
@@ -285,10 +366,17 @@ type ActivityDetails = {
   supplierRequired: boolean;
   supplierName: string | null;
   supplierPhone: string | null;
+  beforeEnabled: boolean;
+  beforeReason: string;
+  beforeMedia: MediaAttachmentData[];
+  afterEnabled: boolean;
+  afterReason: string;
+  afterMedia: MediaAttachmentData[];
   media: MediaAttachmentData[];
 };
 
 type RelatedIssue = { id: number; title: string; severity: "HIGH" | "MEDIUM" | "LOW"; state: "OPEN" | "CLOSED" };
+type ActivityPreviewSelection = { phase: "GENERAL" | "BEFORE" | "AFTER"; index: number };
 
 function formatActivityDate(dateKey: string | null) {
   if (!dateKey) return "—";
@@ -297,10 +385,34 @@ function formatActivityDate(dateKey: string | null) {
 }
 
 export function ActivityDetailsDialog({ activity, relatedIssues, open, onOpenChange }: { activity: ActivityDetails; relatedIssues: RelatedIssue[]; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [previewSelection, setPreviewSelection] = useState<ActivityPreviewSelection | null>(null);
   const activityStatusLabel = activity.completed ? "Done" : "In progress";
+  const previewPhase = previewSelection?.phase ?? "GENERAL";
+  const previewImages = (previewPhase === "BEFORE" ? activity.beforeMedia : previewPhase === "AFTER" ? activity.afterMedia : activity.media).filter((item) => !isVideoAttachment(item));
+  const comparisonImages = (previewPhase === "BEFORE" ? activity.afterMedia : previewPhase === "AFTER" ? activity.beforeMedia : []).filter((item) => !isVideoAttachment(item));
+  const previewIsComparison = previewPhase !== "GENERAL" && activity.beforeEnabled && activity.afterEnabled;
+  const previewPairCount = previewIsComparison ? Math.max(previewImages.length, comparisonImages.length) : previewImages.length;
+  const previewImageIndex = previewSelection?.index ?? 0;
+  const previewImage = previewImages[previewImageIndex] ?? null;
+  const comparisonBeforeImage = previewPhase === "BEFORE" ? previewImage : comparisonImages[previewImageIndex] ?? null;
+  const comparisonAfterImage = previewPhase === "AFTER" ? previewImage : comparisonImages[previewImageIndex] ?? null;
+
+  function openActivityPreview(phase: ActivityPreviewSelection["phase"], imageIndex: number) {
+    setPreviewSelection({ phase, index: imageIndex });
+    onOpenChange(false);
+  }
+
+  function moveActivityPreview(direction: -1 | 1) {
+    setPreviewSelection((current) => {
+      if (!current) return current;
+      const count = previewIsComparison ? previewPairCount : previewImages.length;
+      return { ...current, index: Math.min(Math.max(current.index + direction, 0), count - 1) };
+    });
+  }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+    <Dialog open={open} disablePointerDismissal onOpenChange={onOpenChange}>
       <DialogContent className="detail-dialog-content activity-details-dialog project-details-dialog" onClick={(event) => event.stopPropagation()}>
         <div className="detail-dialog-header project-detail-header activity-project-detail-header">
           <div className="project-detail-header-copy">
@@ -312,78 +424,179 @@ export function ActivityDetailsDialog({ activity, relatedIssues, open, onOpenCha
           </div>
           <DialogClose className="icon-button project-tasks-close" aria-label="Close activity details"><X size={17} /></DialogClose>
         </div>
-        <section className="activity-schedule" aria-label="Activity schedule">
-          <div className="activity-schedule-card activity-schedule-start">
-            <span className="activity-schedule-label"><CalendarDays size={17} aria-hidden="true" /> Start date</span>
-            <strong>{activity.startDate ? formatActivityDate(activity.startDate) : "Not set"}</strong>
-            <span className="activity-schedule-note">{activity.startDate ? "Activity begins" : "No start date entered"}</span>
-          </div>
-          <ArrowRight className="activity-schedule-flow" size={22} aria-hidden="true" />
-          <div className="activity-schedule-card activity-schedule-finish">
-            <span className="activity-schedule-label"><CalendarDays size={17} aria-hidden="true" /> Finish date</span>
-            <strong>{activity.finishDate ? formatActivityDate(activity.finishDate) : "Not set"}</strong>
-            <span className="activity-schedule-note">{activity.finishDate ? "Target completion" : "No finish date entered"}</span>
-          </div>
-        </section>
-        <section className="detail-copy-section project-detail-progress" aria-label="Activity progress">
-          <div className="project-detail-progress-heading">
-            <div className="project-detail-progress-label"><h3>Progress</h3></div>
-            <strong>{activity.progress}%</strong>
-          </div>
-          <Progress value={activity.progress} tone={activity.completed ? "finish" : "success"} />
-        </section>
-        <section className="detail-copy-section project-timeline-section" aria-label={`${activity.content} timeline`}>
-          <div className="project-timeline-heading">
-            <div><h3>Activity timeline</h3><span>1 step</span></div>
-          </div>
-          <ol className="project-timeline-list">
-            <li className={`project-timeline-step project-timeline-step-${activity.completed ? "done" : "in_progress"}`}>
-              <span className="project-timeline-marker" aria-hidden="true">{activity.completed ? "✓" : "1"}</span>
-              <div className="project-timeline-step-card">
-                <div className="project-timeline-step-heading">
-                  <strong>{activity.content}</strong>
-                  <span className={`project-task-status-text project-task-status-${activity.completed ? "done" : "in_progress"}`}>{activityStatusLabel}</span>
-                </div>
-                <p>
-                  <span>{activity.startDate ? formatActivityDate(activity.startDate) : "Start date not set"}</span>
-                  <span aria-hidden="true">→</span>
-                  <span>{activity.finishDate ? formatActivityDate(activity.finishDate) : "Finish date not set"}</span>
-                </p>
+        <div className={`activity-details-layout${activity.beforeEnabled && activity.afterEnabled ? " activity-details-layout-comparison" : ""}`}>
+          <div className="activity-details-summary">
+            <section className="activity-schedule" aria-label="Activity schedule">
+              <div className="activity-schedule-card activity-schedule-start">
+                <span className="activity-schedule-label"><CalendarDays size={17} aria-hidden="true" /> Start date</span>
+                <strong>{activity.startDate ? formatActivityDate(activity.startDate) : "Not set"}</strong>
+                <span className="activity-schedule-note">{activity.startDate ? "Activity begins" : "No start date entered"}</span>
               </div>
-            </li>
-          </ol>
-        </section>
-        <section className="detail-copy-section activity-detail-copy">
-          <h3>Description</h3>
-          <p>{activity.description || "No description provided."}</p>
-        </section>
-        {activity.supplierRequired && (
-          <section className="detail-copy-section supplier-detail-section">
-            <h3>Supplier</h3>
-            <dl className="supplier-detail-grid">
-              <div><dt>Supplier name</dt><dd>{activity.supplierName || "—"}</dd></div>
-              {activity.supplierPhone && <div><dt>Phone</dt><dd>{activity.supplierPhone}</dd></div>}
-            </dl>
-          </section>
-        )}
-        {relatedIssues.length > 0 && (
-          <section className="detail-copy-section related-issue-section">
-            <h3>Related issues</h3>
-            <ul className="related-issue-list">
-              {relatedIssues.map((issue) => (
-                <li key={issue.id}>
-                  <span>{issue.title}</span>
-                  <Badge variant={issue.state === "CLOSED" ? "success" : issue.severity === "HIGH" ? "danger" : issue.severity === "LOW" ? "neutral" : "warning"}>
-                    {issue.state === "CLOSED" ? "Done" : issue.severity === "HIGH" ? "High" : issue.severity === "LOW" ? "Low" : "Medium"}
-                  </Badge>
+              <ArrowRight className="activity-schedule-flow" size={22} aria-hidden="true" />
+              <div className="activity-schedule-card activity-schedule-finish">
+                <span className="activity-schedule-label"><CalendarDays size={17} aria-hidden="true" /> Finish date</span>
+                <strong>{activity.finishDate ? formatActivityDate(activity.finishDate) : "Not set"}</strong>
+                <span className="activity-schedule-note">{activity.finishDate ? "Target completion" : "No finish date entered"}</span>
+              </div>
+            </section>
+            <section className="detail-copy-section project-detail-progress" aria-label="Activity progress">
+              <div className="project-detail-progress-heading">
+                <div className="project-detail-progress-label"><h3>Progress</h3></div>
+                <strong>{activity.progress}%</strong>
+              </div>
+              <Progress value={activity.progress} tone={activity.completed ? "finish" : "success"} />
+            </section>
+            <section className="detail-copy-section project-timeline-section" aria-label={`${activity.content} timeline`}>
+              <div className="project-timeline-heading">
+                <div><h3>Activity timeline</h3><span>1 step</span></div>
+              </div>
+              <ol className="project-timeline-list">
+                <li className={`project-timeline-step project-timeline-step-${activity.completed ? "done" : "in_progress"}`}>
+                  <span className="project-timeline-marker" aria-hidden="true">{activity.completed ? "✓" : "1"}</span>
+                  <div className="project-timeline-step-card">
+                    <div className="project-timeline-step-heading">
+                      <strong>{activity.content}</strong>
+                      <span className={`project-task-status-text project-task-status-${activity.completed ? "done" : "in_progress"}`}>{activityStatusLabel}</span>
+                    </div>
+                    <p>
+                      <span>{activity.startDate ? formatActivityDate(activity.startDate) : "Start date not set"}</span>
+                      <span aria-hidden="true">→</span>
+                      <span>{activity.finishDate ? formatActivityDate(activity.finishDate) : "Finish date not set"}</span>
+                    </p>
+                  </div>
                 </li>
-              ))}
-            </ul>
-          </section>
-        )}
-        <ImageAttachment entityType="activity" entityId={activity.id} initialMedia={activity.media} alt={`Media attached to ${activity.content}`} />
+              </ol>
+            </section>
+            {activity.supplierRequired && (
+              <section className="detail-copy-section supplier-detail-section">
+                <h3>Supplier</h3>
+                <dl className="supplier-detail-grid">
+                  <div><dt>Supplier name</dt><dd>{activity.supplierName || "—"}</dd></div>
+                  {activity.supplierPhone && <div><dt>Phone</dt><dd>{activity.supplierPhone}</dd></div>}
+                </dl>
+              </section>
+            )}
+            {relatedIssues.length > 0 && (
+              <section className="detail-copy-section related-issue-section">
+                <h3>Related issues</h3>
+                <ul className="related-issue-list">
+                  {relatedIssues.map((issue) => (
+                    <li key={issue.id}>
+                      <span>{issue.title}</span>
+                      <Badge variant={issue.state === "CLOSED" ? "success" : issue.severity === "HIGH" ? "danger" : issue.severity === "LOW" ? "neutral" : "warning"}>
+                        {issue.state === "CLOSED" ? "Done" : issue.severity === "HIGH" ? "High" : issue.severity === "LOW" ? "Low" : "Medium"}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+          <aside className="activity-details-media-column">
+            <section className="detail-copy-section activity-detail-copy">
+              <h3>Description</h3>
+              <p>{activity.description || "No description provided."}</p>
+            </section>
+            {(activity.beforeEnabled || activity.afterEnabled) && (
+              <section className="activity-photo-comparison" aria-label="Before and after photos">
+                <div className="activity-photo-comparison-heading">
+                  <h3>{activity.beforeEnabled && activity.afterEnabled ? "Before & After comparison" : "Activity photos"}</h3>
+                  <p>{activity.beforeEnabled && activity.afterEnabled ? "Compare the original and completed work." : "Review the photos and their description."}</p>
+                </div>
+                <div className={`activity-photo-comparison-grid${activity.beforeEnabled && activity.afterEnabled ? " is-paired" : " is-single"}`}>
+                  {activity.beforeEnabled && (
+                    <article className="activity-photo-comparison-card">
+                      <div className="activity-photo-comparison-copy">
+                        <h4>Before</h4>
+                        <p>{activity.beforeReason}</p>
+                      </div>
+                      <ImageAttachment entityType="activity" entityId={activity.id} initialMedia={activity.beforeMedia} alt={`Before photos for ${activity.content}`} label="Before photos" activityPhase="BEFORE" comparisonMedia={activity.afterEnabled ? activity.afterMedia : undefined} showHeading={false} onPreviewOpen={(imageIndex) => openActivityPreview("BEFORE", imageIndex)} />
+                    </article>
+                  )}
+                  {activity.afterEnabled && (
+                    <article className="activity-photo-comparison-card">
+                      <div className="activity-photo-comparison-copy">
+                        <h4>After</h4>
+                        <p>{activity.afterReason}</p>
+                      </div>
+                      <ImageAttachment entityType="activity" entityId={activity.id} initialMedia={activity.afterMedia} alt={`After photos for ${activity.content}`} label="After photos" activityPhase="AFTER" comparisonMedia={activity.beforeEnabled ? activity.beforeMedia : undefined} showHeading={false} onPreviewOpen={(imageIndex) => openActivityPreview("AFTER", imageIndex)} />
+                    </article>
+                  )}
+                </div>
+              </section>
+            )}
+            {(activity.media.length > 0 || (!activity.beforeEnabled && !activity.afterEnabled)) && (
+              <ImageAttachment entityType="activity" entityId={activity.id} initialMedia={activity.media} alt={`Media attached to ${activity.content}`} onPreviewOpen={(imageIndex) => openActivityPreview("GENERAL", imageIndex)} />
+            )}
+          </aside>
+        </div>
       </DialogContent>
     </Dialog>
+    <Dialog open={previewSelection !== null} disablePointerDismissal onOpenChange={(nextOpen) => {
+      if (!nextOpen) {
+        setPreviewSelection(null);
+        onOpenChange(true);
+      }
+    }}>
+      <DialogContent className={`media-preview-dialog${previewIsComparison ? " media-comparison-preview-dialog" : ""}`} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => {
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          moveActivityPreview(-1);
+        } else if (event.key === "ArrowRight") {
+          event.preventDefault();
+          moveActivityPreview(1);
+        }
+      }}>
+        <div className="detail-dialog-header">
+          <div>
+            <DialogTitle>{previewIsComparison ? "Before & After comparison" : "Image preview"}</DialogTitle>
+            <DialogDescription>{previewIsComparison
+              ? "Compare both stages side by side. Use the arrows or left and right keys to move through the image pairs."
+              : previewImages.length > 1 ? "Use the arrows or left and right keys to move between images." : "Close the preview to return to the activity details."}</DialogDescription>
+          </div>
+          <DialogClose className="icon-button project-tasks-close" aria-label="Close image preview"><X size={17} /></DialogClose>
+        </div>
+        {previewIsComparison ? (
+          <>
+            <div className="media-comparison-preview-grid">
+              <section className="media-comparison-preview-panel">
+                <h3>Before</h3>
+                {comparisonBeforeImage ? (
+                  <div className="media-comparison-preview-frame">
+                    <Image src={comparisonBeforeImage.url} alt={`Before image pair ${previewImageIndex + 1}`} fill sizes="(max-width: 760px) 94vw, 48vw" unoptimized />
+                  </div>
+                ) : <p className="media-comparison-preview-empty">No Before image at this position.</p>}
+              </section>
+              <section className="media-comparison-preview-panel">
+                <h3>After</h3>
+                {comparisonAfterImage ? (
+                  <div className="media-comparison-preview-frame">
+                    <Image src={comparisonAfterImage.url} alt={`After image pair ${previewImageIndex + 1}`} fill sizes="(max-width: 760px) 94vw, 48vw" unoptimized />
+                  </div>
+                ) : <p className="media-comparison-preview-empty">No After image at this position.</p>}
+              </section>
+            </div>
+            {previewPairCount > 1 && (
+              <div className="media-comparison-preview-controls">
+                <button type="button" className="media-comparison-preview-step" onClick={() => moveActivityPreview(-1)} disabled={previewImageIndex === 0} aria-label="Previous image pair"><ChevronLeft size={20} aria-hidden="true" /></button>
+                <p aria-live="polite">Pair {previewImageIndex + 1} of {previewPairCount}</p>
+                <button type="button" className="media-comparison-preview-step" onClick={() => moveActivityPreview(1)} disabled={previewImageIndex >= previewPairCount - 1} aria-label="Next image pair"><ChevronRight size={20} aria-hidden="true" /></button>
+              </div>
+            )}
+          </>
+        ) : previewImage ? (
+          <div className="media-preview-frame">
+            <Image src={previewImage.url} alt={`Image ${previewImageIndex + 1} of ${previewImages.length}`} fill sizes="(max-width: 700px) 94vw, 1200px" unoptimized />
+            {previewImages.length > 1 && <>
+              <button type="button" className="media-preview-nav media-preview-nav-previous" onClick={() => moveActivityPreview(-1)} disabled={previewImageIndex === 0} aria-label="Previous image"><ChevronLeft size={24} aria-hidden="true" /></button>
+              <button type="button" className="media-preview-nav media-preview-nav-next" onClick={() => moveActivityPreview(1)} disabled={previewImageIndex === previewImages.length - 1} aria-label="Next image"><ChevronRight size={24} aria-hidden="true" /></button>
+            </>}
+          </div>
+        ) : null}
+        {!previewIsComparison && previewImages.length > 1 && <p className="media-preview-count" aria-live="polite">Image {previewImageIndex + 1} of {previewImages.length}</p>}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
@@ -391,6 +604,7 @@ type ProjectDetails = {
   id: number;
   name: string;
   status: "ON_TRACK" | "ATTENTION" | "DELAY" | "FINISH";
+  isRescheduled: boolean;
   progress: number;
   startDate: string | null;
   endDate: string | null;
@@ -429,7 +643,7 @@ function projectDateLabel(project: Pick<ProjectDetails, "startDate" | "endDate">
   return parts.join(" · ");
 }
 
-type ProjectHistoryEntry = {
+type ProjectDateHistoryEntry = {
   id: number;
   field: string;
   oldValue: string | null;
@@ -437,89 +651,64 @@ type ProjectHistoryEntry = {
   changedAt: string;
 };
 
-const historyFieldLabels: Record<string, string> = {
-  name: "Project name",
-  status: "Status",
-  progress: "Progress",
-  yesterday: "Yesterday",
-  today: "Today",
-  startDate: "Start date",
-  endDate: "End date",
-};
-
-function formatHistoryValue(field: string, value: string | null) {
-  if (value === null || value === "") return field === "startDate" || field === "endDate" ? "Not set" : "Empty";
-  if (field === "startDate" || field === "endDate") return formatProjectDate(value);
-  if (field === "progress") return `${value}%`;
-  if (field === "status") {
-    return ({ ON_TRACK: "Ongoing", ATTENTION: "Attention", DELAY: "Delayed", FINISH: "Done" } as Record<string, string>)[value] ?? value;
-  }
-  return value;
-}
-
-function ProjectHistoryDialog({ projectId, open, onOpenChange }: { projectId: number; open: boolean; onOpenChange: (open: boolean) => void }) {
-  const [entries, setEntries] = useState<ProjectHistoryEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+function ProjectScheduleHistory({ projectId }: { projectId: number }) {
+  const [entries, setEntries] = useState<ProjectDateHistoryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!open) return;
     let active = true;
-    setLoading(true);
-    setError("");
-    void getProjectChangeHistoryAction(projectId).then((result) => {
+    void getProjectDateHistoryAction(projectId).then((result) => {
       if (!active) return;
       if (result.ok) setEntries(result.entries);
-      else setError(result.message ?? "Could not load project history.");
+      else setError(result.message ?? "Could not load date changes.");
     }).catch(() => {
-      if (active) setError("Could not load project history.");
+      if (active) setError("Could not load date changes.");
     }).finally(() => {
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [open, projectId]);
+  }, [projectId]);
+
+  const scheduleEntries = [...entries].reverse();
+
+  if (!loading && !error && scheduleEntries.length === 0) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="detail-dialog-content project-history-dialog" onClick={(event) => event.stopPropagation()}>
-        <div className="detail-dialog-header">
-          <div>
-            <DialogTitle>Change history</DialogTitle>
-            <DialogDescription>Project updates and schedule changes</DialogDescription>
-          </div>
-          <DialogClose className="icon-button project-tasks-close" aria-label="Close project history"><X size={17} /></DialogClose>
-        </div>
-        {loading ? (
-          <p className="project-history-state">Loading history…</p>
-        ) : error ? (
-          <p className="project-history-state project-history-error" role="alert">{error}</p>
-        ) : entries.length === 0 ? (
-          <p className="project-history-state">No changes recorded yet.</p>
-        ) : (
-          <ol className="project-history-list">
-            {entries.map((entry) => (
-              <li key={entry.id} className="project-history-entry">
-                <div className="project-history-entry-heading">
-                  <strong>{historyFieldLabels[entry.field] ?? entry.field}</strong>
-                  <time dateTime={entry.changedAt}>
-                    {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(entry.changedAt))}
-                  </time>
-                </div>
-                <p><span>{formatHistoryValue(entry.field, entry.oldValue)}</span><span aria-hidden="true">→</span><strong>{formatHistoryValue(entry.field, entry.newValue)}</strong></p>
-              </li>
-            ))}
-          </ol>
-        )}
-      </DialogContent>
-    </Dialog>
+    <section className="project-schedule-history" aria-label="Schedule date changes" aria-live="polite">
+      <div className="project-schedule-history-heading">
+        <h3>Date changes</h3>
+      </div>
+      {loading ? (
+        <p className="project-schedule-history-state">Loading date changes…</p>
+      ) : error ? (
+        <p className="project-schedule-history-state project-schedule-history-error" role="alert">{error}</p>
+      ) : (
+        <ol className="project-schedule-history-list">
+          {scheduleEntries.map((entry) => (
+            <li key={entry.id} className="project-schedule-history-entry">
+              <span className="project-schedule-history-field">{entry.field === "startDate" ? "Start date" : "End date"}</span>
+              <p className="project-schedule-history-transition">
+                {entry.oldValue ? <del>{formatProjectDate(entry.oldValue)}</del> : <span className="project-schedule-history-unset">Not set</span>}
+                <ArrowRight size={14} aria-hidden="true" />
+                <strong>{entry.newValue ? formatProjectDate(entry.newValue) : "Not set"}</strong>
+              </p>
+              <time dateTime={entry.changedAt}>
+                {new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(entry.changedAt))}
+              </time>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }
 
 export function ProjectDetailsDialog({ project, open, onOpenChange }: { project: ProjectDetails; open: boolean; onOpenChange: (open: boolean) => void }) {
   const status = projectStatusInfo[project.status];
+  const progressTone = status.fill;
   const completedTasks = project.tasks.filter((task) => task.status === "DONE").length;
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const projectStatusLabel = ({ ON_TRACK: "In progress", ATTENTION: "Needs attention", DELAY: "Delayed", FINISH: "Complete" } as const)[project.status];
+  const projectStatusLabel = ({ ON_TRACK: "On schedule", ATTENTION: "Needs attention", DELAY: "Delayed", FINISH: "Complete" } as const)[project.status];
   const taskStatusLabel = { TODO: "To do", IN_PROGRESS: "In progress", DONE: "Done" } as const;
 
   return (
@@ -531,19 +720,25 @@ export function ProjectDetailsDialog({ project, open, onOpenChange }: { project:
               <div className="project-detail-title-row">
                 <DialogTitle>{project.name}</DialogTitle>
                 <Badge variant={project.status === "DELAY" ? "danger" : project.status === "ATTENTION" ? "warning" : project.status === "FINISH" ? "success" : "info"}>{projectStatusLabel}</Badge>
+                {project.isRescheduled && <Badge variant="info" className="project-rescheduled-status">Rescheduled</Badge>}
               </div>
-            </div>
-            <div className="project-detail-meta">
-              <Button type="button" variant="secondary" className="project-history-trigger" onClick={() => setHistoryOpen(true)}>
-                <History size={16} aria-hidden="true" /> History
-              </Button>
             </div>
             <DialogClose className="icon-button project-tasks-close" aria-label="Close project details"><X size={17} /></DialogClose>
           </div>
-          <div className="project-timeline-date-range" aria-label={projectDateLabel(project)}>
-            <div><span><CalendarDays size={14} aria-hidden="true" /> Start</span><strong>{project.startDate ? formatProjectDate(project.startDate) : "Not set"}</strong></div>
-            <div><span><CalendarDays size={14} aria-hidden="true" /> End</span><strong>{project.endDate ? formatProjectDate(project.endDate) : "Not set"}</strong></div>
-          </div>
+          <section className="activity-schedule" aria-label={projectDateLabel(project)}>
+            <div className="activity-schedule-card activity-schedule-start">
+              <span className="activity-schedule-label"><CalendarDays size={17} aria-hidden="true" /> Start date</span>
+              <strong>{project.startDate ? formatProjectDate(project.startDate) : "Not set"}</strong>
+              <span className="activity-schedule-note">{project.startDate ? "Project begins" : "No start date entered"}</span>
+            </div>
+            <ArrowRight className="activity-schedule-flow" size={22} aria-hidden="true" />
+            <div className="activity-schedule-card activity-schedule-finish">
+              <span className="activity-schedule-label"><CalendarDays size={17} aria-hidden="true" /> End date</span>
+              <strong>{project.endDate ? formatProjectDate(project.endDate) : "Not set"}</strong>
+              <span className="activity-schedule-note">{project.endDate ? "Target completion" : "No end date entered"}</span>
+            </div>
+          </section>
+          {open && <ProjectScheduleHistory projectId={project.id} />}
           <section className="detail-copy-section project-detail-progress">
             <div className="project-detail-progress-heading">
               <div className="project-detail-progress-label">
@@ -552,7 +747,7 @@ export function ProjectDetailsDialog({ project, open, onOpenChange }: { project:
               </div>
               <strong>{project.progress}%</strong>
             </div>
-            <Progress value={project.progress} tone={status.fill} />
+            <Progress value={project.progress} tone={progressTone} />
           </section>
           <section className="detail-copy-section project-timeline-section" aria-label={`${project.name} timeline`}>
             <div className="project-timeline-heading">
@@ -586,7 +781,6 @@ export function ProjectDetailsDialog({ project, open, onOpenChange }: { project:
           </section>
         </DialogContent>
       </Dialog>
-      <ProjectHistoryDialog projectId={project.id} open={historyOpen} onOpenChange={setHistoryOpen} />
     </>
   );
 }

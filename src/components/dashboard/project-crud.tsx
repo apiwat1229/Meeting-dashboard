@@ -28,7 +28,6 @@ type ProjectTaskOption = { id: number | string; title: string };
 
 const projectStatusOptions = [
   { value: "ON_TRACK", label: "In Progress" },
-  { value: "DELAY", label: "Delay" },
   { value: "FINISH", label: "Finish" },
 ];
 
@@ -112,6 +111,7 @@ type ProjectData = {
   id: number;
   name: string;
   status: ProjectStatus;
+  isRescheduled: boolean;
   progress: number;
   yesterday: string;
   today: string;
@@ -164,7 +164,7 @@ function ProjectFormFields({ project, tasks, yesterday, today, onYesterdayChange
           </label>
           <div className="field-pair">
             <label className="field-label">Status
-              <ComboboxSelect name="status" options={projectStatusOptions} defaultValue={!project || project.status === "ATTENTION" ? "ON_TRACK" : project.status} />
+              <ComboboxSelect name="status" options={projectStatusOptions} defaultValue={!project || project.status === "ATTENTION" || project.status === "DELAY" ? "ON_TRACK" : project.status} />
             </label>
             <label className="field-label">Progress %
               <Input name="progress" type="number" min="0" max="100" defaultValue={project?.progress ?? 0} required />

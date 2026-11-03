@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed": "node scripts/seed.mjs",
-    "db:setup": "npm run db:migrate && npm run db:seed"
+    "db:setup": "npm run db:migrate && npm run db:seed",
+    "db:bootstrap-admin": "node scripts/bootstrap-admin.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

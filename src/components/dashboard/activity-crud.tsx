@@ -19,12 +19,43 @@ import { MediaFilePicker, uploadMediaFiles } from "@/components/dashboard/media-
 import { getBangkokDateKey, shiftDateKey } from "@/lib/date-key";
 
 type ActivitySection = "YESTERDAY" | "TODAY";
-type ActivityData = { id: number; content: string; description: string; section: ActivitySection; completed: boolean; progress: number; activityDate: string; startDate: string | null; finishDate: string | null; supplierRequired: boolean; supplierName: string | null; supplierPhone: string | null; media: Array<{ id: number; url: string }>; isCarryover?: boolean; willCarryOver?: boolean };
+type ActivityCategory = "CSR" | "GA" | "SUPPORT" | "GENERAL";
+type ActivityData = {
+  id: number;
+  content: string;
+  description: string;
+  section: ActivitySection;
+  category: ActivityCategory;
+  completed: boolean;
+  progress: number;
+  activityDate: string;
+  startDate: string | null;
+  finishDate: string | null;
+  supplierRequired: boolean;
+  supplierName: string | null;
+  supplierPhone: string | null;
+  beforeEnabled: boolean;
+  beforeReason: string;
+  beforeMedia: Array<{ id: number; url: string }>;
+  afterEnabled: boolean;
+  afterReason: string;
+  afterMedia: Array<{ id: number; url: string }>;
+  media: Array<{ id: number; url: string }>;
+  isCarryover?: boolean;
+  willCarryOver?: boolean;
+};
 
 const completionOptions = [
   { value: "false", label: "In progress" },
   { value: "true", label: "Done" },
 ];
+
+const activityCategoryOptions = [
+  { value: "CSR", label: "CSR programs & community" },
+  { value: "GA", label: "GA, grounds & safety" },
+  { value: "SUPPORT", label: "Support & coordination" },
+  { value: "GENERAL", label: "Other / not categorized" },
+] as const;
 
 function activityDateKeyFromDate(date: Date) {
   const parts = Object.fromEntries(
@@ -170,9 +201,76 @@ function SupplierFields({
   );
 }
 
+function ActivityPhotoStageFields({
+  phase,
+  reason,
+  onReasonChange,
+  files,
+  onFilesChange,
+  pending,
+  entityId,
+  media = [],
+}: {
+  phase: "BEFORE" | "AFTER";
+  reason: string;
+  onReasonChange: (reason: string) => void;
+  files: File[];
+  onFilesChange: (files: File[]) => void;
+  pending: boolean;
+  entityId?: number;
+  media?: Array<{ id: number; url: string }>;
+}) {
+  const stage = phase === "BEFORE" ? "Before" : "After";
+  const lowerStage = stage.toLowerCase();
+  const reasonName = `${lowerStage}Reason`;
+
+  return (
+    <section className="project-edit-card activity-photo-stage">
+      <h3>{stage} photos</h3>
+      <label className="field-label">Reason (required)
+        <Textarea name={reasonName} maxLength={2000} rows={3} required value={reason} onChange={(event) => onReasonChange(event.currentTarget.value)} placeholder={`Explain what the ${lowerStage} photos show`} />
+      </label>
+      {entityId !== undefined && media.length > 0 && (
+        <ImageAttachment
+          entityType="activity"
+          entityId={entityId}
+          initialMedia={media}
+          alt={`${stage} photos for this activity`}
+          label={`Saved ${lowerStage} photos`}
+          activityPhase={phase}
+          editable
+          allowUpload={false}
+        />
+      )}
+      <MediaFilePicker
+        files={files}
+        pending={pending}
+        onFilesChange={onFilesChange}
+        label={`Upload ${lowerStage} photos`}
+        imagesOnly
+      />
+    </section>
+  );
+}
+
+function ActivityPhotoPairToggle({ enabled, onEnabledChange }: { enabled: boolean; onEnabledChange: (enabled: boolean) => void }) {
+  return (
+    <section className="project-edit-card activity-photo-pair-toggle-card">
+      <h3>Before &amp; After photos</h3>
+      <label className="supplier-required-toggle activity-photo-stage-toggle">
+        <input type="checkbox" checked={enabled} onChange={(event) => onEnabledChange(event.currentTarget.checked)} />
+        <span>
+          <strong>Enable Before &amp; After photo uploads</strong>
+          <small>When enabled, provide photos and a reason for both stages.</small>
+        </span>
+      </label>
+    </section>
+  );
+}
+
 const ActivityCreateContext = createContext<(() => void) | null>(null);
 
-export function ActivityCreateProvider({ section, children, supplierNames }: { section: ActivitySection; children: ReactNode; supplierNames: string[] }) {
+export function ActivityCreateProvider({ section, category: defaultCategory = "GENERAL", children, supplierNames }: { section: ActivitySection; category?: ActivityCategory; children: ReactNode; supplierNames: string[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState("");
@@ -180,11 +278,18 @@ export function ActivityCreateProvider({ section, children, supplierNames }: { s
   const [startDate, setStartDate] = useState("");
   const [finishDate, setFinishDate] = useState("");
   const [progress, setProgress] = useState("0");
+  const [category, setCategory] = useState<ActivityCategory>(defaultCategory);
   const [supplierRequired, setSupplierRequired] = useState(false);
   const [supplierName, setSupplierName] = useState("");
   const [supplierPhone, setSupplierPhone] = useState("");
   const [editCompleted, setEditCompleted] = useState("false");
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
+  const [beforeEnabled, setBeforeEnabled] = useState(false);
+  const [beforeReason, setBeforeReason] = useState("");
+  const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
+  const [afterEnabled, setAfterEnabled] = useState(false);
+  const [afterReason, setAfterReason] = useState("");
+  const [afterFiles, setAfterFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
 
   async function handleCreate(formData: FormData) {
@@ -196,13 +301,15 @@ export function ActivityCreateProvider({ section, children, supplierNames }: { s
         return;
       }
 
-      if (mediaFiles.length > 0) {
-        const uploadResult = await uploadMediaFiles("activity", result.activityId, mediaFiles);
-        if (uploadResult.failed.length > 0) toast.error(`Activity added; ${uploadResult.uploaded} media uploaded, ${uploadResult.failed.length} failed. ${uploadResult.failed[0].message}`);
-        else toast.success(`Activity added with ${uploadResult.uploaded} media file${uploadResult.uploaded === 1 ? "" : "s"}.`);
-      } else {
-        toast.success(result.message);
-      }
+      const uploadResults = await Promise.all([
+        ...(mediaFiles.length > 0 ? [uploadMediaFiles("activity", result.activityId, mediaFiles)] : []),
+        ...(beforeEnabled && beforeFiles.length > 0 ? [uploadMediaFiles("activity", result.activityId, beforeFiles, "BEFORE")] : []),
+        ...(afterEnabled && afterFiles.length > 0 ? [uploadMediaFiles("activity", result.activityId, afterFiles, "AFTER")] : []),
+      ]);
+      const uploaded = uploadResults.reduce((total, item) => total + item.uploaded, 0);
+      const failed = uploadResults.flatMap((item) => item.failed);
+      if (failed.length > 0) toast.error(`Activity added; ${uploaded} media uploaded, ${failed.length} failed. ${failed[0].message}`);
+      else toast.success(uploaded > 0 ? `Activity added with ${uploaded} media file${uploaded === 1 ? "" : "s"}.` : result.message);
       router.refresh();
       setOpen(false);
       setContent("");
@@ -212,6 +319,12 @@ export function ActivityCreateProvider({ section, children, supplierNames }: { s
       setSupplierName("");
       setSupplierPhone("");
       setMediaFiles([]);
+      setBeforeEnabled(false);
+      setBeforeReason("");
+      setBeforeFiles([]);
+      setAfterEnabled(false);
+      setAfterReason("");
+      setAfterFiles([]);
     } catch {
       toast.error("Could not add the activity.");
     } finally {
@@ -226,11 +339,18 @@ export function ActivityCreateProvider({ section, children, supplierNames }: { s
     setStartDate(section === "YESTERDAY" ? shiftDateKey(today, -1) : today);
     setFinishDate("");
     setProgress("0");
+    setCategory(defaultCategory);
     setSupplierRequired(false);
     setSupplierName("");
     setSupplierPhone("");
     setEditCompleted("false");
     setMediaFiles([]);
+    setBeforeEnabled(false);
+    setBeforeReason("");
+    setBeforeFiles([]);
+    setAfterEnabled(false);
+    setAfterReason("");
+    setAfterFiles([]);
     setOpen(true);
   }
 
@@ -243,18 +363,24 @@ export function ActivityCreateProvider({ section, children, supplierNames }: { s
       setSupplierName("");
       setSupplierPhone("");
       setMediaFiles([]);
+      setBeforeEnabled(false);
+      setBeforeReason("");
+      setBeforeFiles([]);
+      setAfterEnabled(false);
+      setAfterReason("");
+      setAfterFiles([]);
     }
   }
 
   return (
     <ActivityCreateContext.Provider value={openAddForm}>
       {children}
-      <Dialog open={open} onOpenChange={handleOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange} disablePointerDismissal>
         <DialogContent className="detail-dialog-content activity-edit-dialog">
           <div className="detail-dialog-header">
             <div>
               <DialogTitle>Add activity</DialogTitle>
-              <DialogDescription>Add an activity, set its dates, status, and progress, and attach supporting media.</DialogDescription>
+              <DialogDescription>Add an activity, set its schedule, and optionally enable paired Before and After photo uploads.</DialogDescription>
             </div>
             <DialogClose className="icon-button project-tasks-close" aria-label="Close activity form"><X size={17} /></DialogClose>
           </div>
@@ -264,6 +390,11 @@ export function ActivityCreateProvider({ section, children, supplierNames }: { s
             <div className="activity-edit-layout">
               <section className="project-edit-card activity-edit-information">
                 <h3>Activity information</h3>
+                <label className="field-label">Work area
+                  <ComboboxSelect name="category" value={category} options={activityCategoryOptions} onValueChange={(value) => {
+                    if (value === "CSR" || value === "GA" || value === "SUPPORT" || value === "GENERAL") setCategory(value);
+                  }} />
+                </label>
                 <label className="field-label">Activity
                   <Input name="content" minLength={2} maxLength={220} required value={content} onChange={(event) => setContent(event.currentTarget.value)} placeholder="Enter an activity name" />
                 </label>
@@ -276,11 +407,14 @@ export function ActivityCreateProvider({ section, children, supplierNames }: { s
                 </div>
                 <label className="field-label">Status
                   <ComboboxSelect value={editCompleted} options={completionOptions} onValueChange={(value) => {
-                    if (value === "true" || value === "false") setEditCompleted(value);
+                    if (value === "true" || value === "false") {
+                      setEditCompleted(value);
+                      if (value === "true") setProgress("100");
+                    }
                   }} />
                 </label>
                 <label className="field-label">Progress %
-                  <Input name="progress" type="number" min="0" max="100" step="1" required value={progress} onChange={(event) => setProgress(event.currentTarget.value)} />
+                  <Input name="progress" type="number" min="0" max="100" step="1" required readOnly={editCompleted === "true"} value={progress} onChange={(event) => setProgress(event.currentTarget.value)} />
                 </label>
               </section>
               <aside className="activity-edit-side">
@@ -294,6 +428,37 @@ export function ActivityCreateProvider({ section, children, supplierNames }: { s
                   supplierNames={supplierNames}
                 />
                 <MediaFilePicker files={mediaFiles} pending={pending} onFilesChange={setMediaFiles} />
+                <ActivityPhotoPairToggle
+                  enabled={beforeEnabled || afterEnabled}
+                  onEnabledChange={(enabled) => { setBeforeEnabled(enabled); setAfterEnabled(enabled); }}
+                />
+                <input type="hidden" name="beforeEnabled" value={String(beforeEnabled)} />
+                <input type="hidden" name="afterEnabled" value={String(afterEnabled)} />
+                {beforeEnabled || afterEnabled ? (
+                  <>
+                    <ActivityPhotoStageFields
+                      phase="BEFORE"
+                      reason={beforeReason}
+                      onReasonChange={setBeforeReason}
+                      files={beforeFiles}
+                      onFilesChange={setBeforeFiles}
+                      pending={pending}
+                    />
+                    <ActivityPhotoStageFields
+                      phase="AFTER"
+                      reason={afterReason}
+                      onReasonChange={setAfterReason}
+                      files={afterFiles}
+                      onFilesChange={setAfterFiles}
+                      pending={pending}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <input type="hidden" name="beforeReason" value={beforeReason} />
+                    <input type="hidden" name="afterReason" value={afterReason} />
+                  </>
+                )}
               </aside>
             </div>
             <div className="project-edit-actions">
@@ -331,9 +496,16 @@ export function ActivityEditor({ activity, relatedIssues, children, supplierName
   const [startDate, setStartDate] = useState(activity.startDate ?? "");
   const [finishDate, setFinishDate] = useState(activity.finishDate ?? "");
   const [progress, setProgress] = useState(String(activity.progress ?? 0));
+  const [category, setCategory] = useState<ActivityCategory>(activity.category);
   const [supplierRequired, setSupplierRequired] = useState(activity.supplierRequired);
   const [supplierName, setSupplierName] = useState(activity.supplierName ?? "");
   const [supplierPhone, setSupplierPhone] = useState(activity.supplierPhone ?? "");
+  const [beforeEnabled, setBeforeEnabled] = useState(activity.beforeEnabled || activity.afterEnabled);
+  const [beforeReason, setBeforeReason] = useState(activity.beforeReason);
+  const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
+  const [afterEnabled, setAfterEnabled] = useState(activity.beforeEnabled || activity.afterEnabled);
+  const [afterReason, setAfterReason] = useState(activity.afterReason);
+  const [afterFiles, setAfterFiles] = useState<File[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, setPending] = useState(false);
 
@@ -342,7 +514,14 @@ export function ActivityEditor({ activity, relatedIssues, children, supplierName
     try {
       const result = await updateActivityAction(formData);
       if (result.ok) {
-        toast.success(result.message);
+        const uploadResults = await Promise.all([
+          ...(beforeEnabled && beforeFiles.length > 0 ? [uploadMediaFiles("activity", activity.id, beforeFiles, "BEFORE")] : []),
+          ...(afterEnabled && afterFiles.length > 0 ? [uploadMediaFiles("activity", activity.id, afterFiles, "AFTER")] : []),
+        ]);
+        const uploaded = uploadResults.reduce((total, item) => total + item.uploaded, 0);
+        const failed = uploadResults.flatMap((item) => item.failed);
+        if (failed.length > 0) toast.error(`Activity updated; ${uploaded} photos uploaded, ${failed.length} failed. ${failed[0].message}`);
+        else toast.success(result.message);
         router.refresh();
         setOpen(false);
       } else {
@@ -379,10 +558,17 @@ export function ActivityEditor({ activity, relatedIssues, children, supplierName
     setEditCompleted(String(activity.completed));
     setStartDate(activity.startDate ?? "");
     setFinishDate(activity.finishDate ?? "");
-    setProgress(String(activity.progress ?? 0));
+    setProgress(activity.completed ? "100" : String(activity.progress ?? 0));
+    setCategory(activity.category);
     setSupplierRequired(activity.supplierRequired);
     setSupplierName(activity.supplierName ?? "");
     setSupplierPhone(activity.supplierPhone ?? "");
+    setBeforeEnabled(activity.beforeEnabled || activity.afterEnabled);
+    setBeforeReason(activity.beforeReason);
+    setBeforeFiles([]);
+    setAfterEnabled(activity.beforeEnabled || activity.afterEnabled);
+    setAfterReason(activity.afterReason);
+    setAfterFiles([]);
     setDetailsOpen(false);
     setConfirmDelete(false);
     setOpen(true);
@@ -399,60 +585,75 @@ export function ActivityEditor({ activity, relatedIssues, children, supplierName
       setConfirmDelete(true);
     }}>
       {children}
-      <Dialog open={open} onOpenChange={(nextOpen) => {
+      <Dialog open={open} disablePointerDismissal onOpenChange={(nextOpen) => {
         if (!nextOpen && confirmDelete) return;
         setOpen(nextOpen);
         if (nextOpen) {
           setEditCompleted(String(activity.completed));
           setStartDate(activity.startDate ?? "");
           setFinishDate(activity.finishDate ?? "");
-          setProgress(String(activity.progress ?? 0));
+          setProgress(activity.completed ? "100" : String(activity.progress ?? 0));
+          setCategory(activity.category);
           setSupplierRequired(activity.supplierRequired);
           setSupplierName(activity.supplierName ?? "");
           setSupplierPhone(activity.supplierPhone ?? "");
+          setBeforeEnabled(activity.beforeEnabled || activity.afterEnabled);
+          setBeforeReason(activity.beforeReason);
+          setBeforeFiles([]);
+          setAfterEnabled(activity.beforeEnabled || activity.afterEnabled);
+          setAfterReason(activity.afterReason);
+          setAfterFiles([]);
         } else {
           setConfirmDelete(false);
         }
       }}>
-        <DialogContent className="detail-dialog-content activity-edit-dialog">
+        <DialogContent className="detail-dialog-content activity-edit-dialog activity-update-dialog">
           <div className="detail-dialog-header">
             <div>
               <DialogTitle>Edit activity</DialogTitle>
-              <DialogDescription>Update the activity name, description, dates, status, and progress.</DialogDescription>
+              <DialogDescription>Update the activity, and optionally manage Before and After photos with a reason for each stage.</DialogDescription>
             </div>
             <DialogClose className="icon-button project-tasks-close" aria-label="Close activity editor"><X size={17} /></DialogClose>
           </div>
-          <form onSubmit={(event) => { event.preventDefault(); void saveActivity(new FormData(event.currentTarget)); }} className="activity-edit-form">
+          <form onSubmit={(event) => { event.preventDefault(); void saveActivity(new FormData(event.currentTarget)); }} className="activity-edit-form activity-update-form">
             <input type="hidden" name="id" value={activity.id} />
             <input type="hidden" name="section" value={activity.isCarryover ? "YESTERDAY" : activity.section} />
             <input type="hidden" name="completed" value={editCompleted} />
-            <div className="activity-edit-layout">
-              <section className="project-edit-card activity-edit-information">
-                <h3>Activity information</h3>
-                <label className="field-label">Activity
-                  <Input name="content" minLength={2} maxLength={220} required defaultValue={activity.content} />
-                </label>
-                <label className="field-label">Description
-                  <Textarea name="description" maxLength={2000} rows={4} defaultValue={activity.description} placeholder="Describe the activity" />
-                </label>
-                <div className="activity-date-fields">
-                  <ActivityDatePicker label="Start" name="startDate" value={startDate} onChange={setStartDate} max={finishDate || undefined} />
-                  <ActivityDatePicker label="Finish" name="finishDate" value={finishDate} onChange={setFinishDate} min={startDate || undefined} />
-                </div>
-                <label className="field-label">Status
-                  <ComboboxSelect
-                    value={editCompleted}
-                    options={completionOptions}
-                    onValueChange={(value) => {
-                      if (value === "true" || value === "false") setEditCompleted(value);
-                    }}
-                  />
-                </label>
-                <label className="field-label">Progress %
-                  <Input name="progress" type="number" min="0" max="100" step="1" required value={progress} onChange={(event) => setProgress(event.currentTarget.value)} />
-                </label>
-              </section>
-              <aside className="activity-edit-side">
+            <div className="activity-edit-layout activity-update-layout">
+              <div className="activity-edit-main activity-update-main">
+                <section className="project-edit-card activity-edit-information">
+                  <h3>Activity information</h3>
+                  <label className="field-label">Work area
+                    <ComboboxSelect name="category" value={category} options={activityCategoryOptions} onValueChange={(value) => {
+                      if (value === "CSR" || value === "GA" || value === "SUPPORT" || value === "GENERAL") setCategory(value);
+                    }} />
+                  </label>
+                  <label className="field-label">Activity
+                    <Input name="content" minLength={2} maxLength={220} required defaultValue={activity.content} />
+                  </label>
+                  <label className="field-label">Description
+                    <Textarea name="description" maxLength={2000} rows={4} defaultValue={activity.description} placeholder="Describe the activity" />
+                  </label>
+                  <div className="activity-date-fields">
+                    <ActivityDatePicker label="Start" name="startDate" value={startDate} onChange={setStartDate} max={finishDate || undefined} />
+                    <ActivityDatePicker label="Finish" name="finishDate" value={finishDate} onChange={setFinishDate} min={startDate || undefined} />
+                  </div>
+                  <label className="field-label">Status
+                    <ComboboxSelect
+                      value={editCompleted}
+                      options={completionOptions}
+                      onValueChange={(value) => {
+                        if (value === "true" || value === "false") {
+                          setEditCompleted(value);
+                          if (value === "true") setProgress("100");
+                        }
+                      }}
+                    />
+                  </label>
+                  <label className="field-label">Progress %
+                    <Input name="progress" type="number" min="0" max="100" step="1" required readOnly={editCompleted === "true"} value={progress} onChange={(event) => setProgress(event.currentTarget.value)} />
+                  </label>
+                </section>
                 <SupplierFields
                   required={supplierRequired}
                   onRequiredChange={setSupplierRequired}
@@ -462,7 +663,46 @@ export function ActivityEditor({ activity, relatedIssues, children, supplierName
                   onPhoneChange={setSupplierPhone}
                   supplierNames={supplierNames}
                 />
-                <ImageAttachment entityType="activity" entityId={activity.id} initialMedia={activity.media} alt={`Media attached to ${activity.content}`} editable />
+              </div>
+              <aside className="activity-edit-side-scroll activity-update-side-scroll">
+                <div className="activity-edit-side">
+                  <ImageAttachment entityType="activity" entityId={activity.id} initialMedia={activity.media} alt={`Media attached to ${activity.content}`} editable />
+                  <ActivityPhotoPairToggle
+                    enabled={beforeEnabled || afterEnabled}
+                    onEnabledChange={(enabled) => { setBeforeEnabled(enabled); setAfterEnabled(enabled); }}
+                  />
+                  <input type="hidden" name="beforeEnabled" value={String(beforeEnabled)} />
+                  <input type="hidden" name="afterEnabled" value={String(afterEnabled)} />
+                  {beforeEnabled || afterEnabled ? (
+                    <>
+                      <ActivityPhotoStageFields
+                        phase="BEFORE"
+                        reason={beforeReason}
+                        onReasonChange={setBeforeReason}
+                        files={beforeFiles}
+                        onFilesChange={setBeforeFiles}
+                        pending={pending}
+                        entityId={activity.id}
+                        media={activity.beforeMedia}
+                      />
+                      <ActivityPhotoStageFields
+                        phase="AFTER"
+                        reason={afterReason}
+                        onReasonChange={setAfterReason}
+                        files={afterFiles}
+                        onFilesChange={setAfterFiles}
+                        pending={pending}
+                        entityId={activity.id}
+                        media={activity.afterMedia}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <input type="hidden" name="beforeReason" value={beforeReason} />
+                      <input type="hidden" name="afterReason" value={afterReason} />
+                    </>
+                  )}
+                </div>
               </aside>
             </div>
             <div className="project-edit-actions">

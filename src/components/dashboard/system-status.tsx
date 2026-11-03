@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { dashboardSectionNumbers } from "@/lib/dashboard-section-numbers";
 import { CctvOperationsPanel } from "@/components/dashboard/cctv-operations";
-import type { CctvMeeting, CctvRecorderItem } from "@/lib/cctv-operations";
+import type { CctvMeeting, CctvMeetingCase, CctvRecorderItem } from "@/lib/cctv-operations";
 
 type ServiceStatus = "UNKNOWN" | "NORMAL" | "ABNORMAL";
 type NetworkService = {
@@ -39,6 +39,8 @@ type CctvSettings = {
   cameraInstallingCount: number;
   recorderItems: CctvRecorderItem[];
   meetings: CctvMeeting[];
+  meetingVisible: boolean;
+  meetingCases: CctvMeetingCase[];
   media: Array<{ id: number; url: string }>;
 };
 type CctvDraft = {
@@ -329,6 +331,8 @@ export function SystemStatusPanel({ networkServices, cctv, reportDateKey }: { ne
             repairing: cctv.cameraRepairingCount,
           }}
           meetings={cctv.meetings}
+          meetingVisible={cctv.meetingVisible}
+          meetingCases={cctv.meetingCases}
           summary={cctvSummary}
           sectionNumber={dashboardSectionNumbers.cctv}
           onOpenStatus={editCctvStatus}
