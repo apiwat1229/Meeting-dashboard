@@ -475,6 +475,12 @@ p {
   align-content: stretch;
 }
 
+.summary-network-card {
+  grid-template-rows: auto;
+  align-content: start;
+  align-self: start;
+}
+
 .summary-cctv-card {
   grid-template-rows: auto auto;
   align-content: start;
@@ -568,13 +574,7 @@ p {
 }
 
 .cctv-operations-panel::before {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 100%;
-  border-top: 1px solid var(--color-border);
-  content: "";
-  transform: translateX(-50%);
+  display: none;
 }
 
 .cctv-operations-heading {
@@ -745,7 +745,7 @@ p {
 
 .cctv-meeting-details > div {
   display: grid;
-  grid-template-columns: 74px minmax(0, 1fr);
+  grid-template-columns: 110px minmax(0, 1fr);
   gap: 5px;
   align-items: start;
 }
@@ -1010,7 +1010,7 @@ p {
 .dashboard-content .summary-cctv-card .cctv-recorder-list,
 .dashboard-content .summary-cctv-card .cctv-meeting-details,
 .dashboard-content .summary-cctv-card .cctv-recorder-quantity {
-  font-size: 13px !important;
+  font-size: 19px !important;
 }
 
 .cctv-manager-empty {
@@ -5878,16 +5878,32 @@ p {
 }
 
 .dashboard-content .network-service-summary-name {
-  font-size: 13px !important;
+  font-size: 19px !important;
 }
 
 .dashboard-content .summary-systems-card .network-service-summary-status {
-  font-size: 12px !important;
+  font-size: 14px !important;
 }
 
 .dashboard-content .network-service-summary-note,
 .dashboard-content .network-service-summary-empty {
-  font-size: 12px !important;
+  font-size: 15px !important;
+}
+
+.dashboard-content .summary-cctv-card .cctv-recorder-name,
+.dashboard-content .summary-cctv-card .cctv-meeting-section h4,
+.dashboard-content .summary-cctv-card .cctv-case-summary-label,
+.dashboard-content .summary-cctv-card .cctv-case-summary-list {
+  font-size: 19px !important;
+}
+
+.dashboard-content .summary-cctv-card .cctv-recorder-reason,
+.dashboard-content .summary-cctv-card .cctv-case-summary-counts small {
+  font-size: 15px !important;
+}
+
+.dashboard-content .summary-cctv-card .cctv-case-summary-counts strong {
+  font-size: 22px !important;
 }
 
 .dashboard-content > .main-grid {
@@ -7622,4 +7638,31 @@ p {
     align-self: stretch;
     justify-content: space-between;
   }
+}
+
+.cctv-details-toggle {
+  width: 100%;
+  padding: 4px 2px;
+  border: 0;
+  color: var(--color-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.cctv-details-toggle:hover,
+.cctv-details-toggle:focus-visible {
+  color: var(--color-ink);
+}
+
+.dashboard-content .summary-cctv-card .cctv-operations-panel {
+  margin-top: -6px;
+  padding-top: 0;
+  gap: 4px;
+}
+
+.dashboard-content .summary-cctv-card .cctv-details-toggle {
+  padding-block: 0;
 }

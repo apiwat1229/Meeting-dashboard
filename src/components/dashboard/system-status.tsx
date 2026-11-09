@@ -173,6 +173,7 @@ export function SystemStatusPanel({ networkServices, cctv, reportDateKey }: { ne
   const networkSummary = getNetworkSummary(networkServices);
   const cctvSummary = getCctvSummary(cctv);
   const [networkOpen, setNetworkOpen] = useState(false);
+  const [networkExpanded, setNetworkExpanded] = useState(false);
   const [networkPending, setNetworkPending] = useState(false);
   const [cctvPending, setCctvPending] = useState(false);
   const [serviceDrafts, setServiceDrafts] = useState<ServiceDraft[]>(() => createServiceDrafts(networkServices));
@@ -289,15 +290,19 @@ export function SystemStatusPanel({ networkServices, cctv, reportDateKey }: { ne
 
   return (
     <>
-      <Card className="summary-card summary-systems-card">
-        <ContextMenu as="div" role="button" className={`summary-breakdown-item summary-${networkSummary.tone} summary-systems-trigger`} ariaLabel={`${networkSummary.ariaLabel}. Click to configure.`} ariaExpanded={networkOpen} ariaHasPopup="dialog" onActivate={editNetworkStatus} onEdit={editNetworkStatus}>
+      <Card className="summary-card summary-systems-card summary-network-card">
+        <ContextMenu as="div" role="button" className={`summary-breakdown-item summary-${networkSummary.tone} summary-systems-trigger`} ariaLabel={`${networkSummary.ariaLabel}. Click to ${networkExpanded ? "collapse" : "expand"} all services. Right-click to edit.`} ariaExpanded={networkExpanded} onActivate={() => setNetworkExpanded((current) => !current)} onEdit={editNetworkStatus}>
           <strong className="summary-breakdown-title network-server-title">
             {dashboardSectionNumbers.networkServer}. Network &amp; Server
           </strong>
           <span className={`system-health-label system-health-${networkSummary.tone}`}>{networkSummary.label}</span>
           {networkSummary.detail && <small>{networkSummary.detail}</small>}
           <div className="network-service-summary" aria-label="Network and server service details">
-            {networkServices.length > 0 ? networkServices.map((service) => {
+            {networkServices.length > 0 && !networkExpanded && !networkServices.some((service) => service.status === "ABNORMAL") ? (
+              <span className="network-service-summary-empty">
+                {networkSummary.tone === "success" ? `All ${networkServices.length} services are normal` : "No abnormal services"} · Click to view all
+              </span>
+            ) : networkServices.length > 0 ? networkServices.filter((service) => networkExpanded || service.status === "ABNORMAL").map((service) => {
               const statusVariant = service.status === "NORMAL" ? "success" : service.status === "ABNORMAL" ? "danger" : "neutral";
               const statusLabel = service.status === "NORMAL" ? "Normal" : service.status === "ABNORMAL" ? "Abnormal" : "Not set";
               const description = [service.reason, service.detail].filter(Boolean).join(" · ");
@@ -319,6 +324,9 @@ export function SystemStatusPanel({ networkServices, cctv, reportDateKey }: { ne
               <span className="network-service-summary-empty">No services configured</span>
             )}
           </div>
+          {networkExpanded && (
+            <button type="button" className="cctv-details-toggle" aria-label="Hide details">Hide details</button>
+          )}
         </ContextMenu>
       </Card>
       <Card className="summary-card summary-systems-card summary-cctv-card">

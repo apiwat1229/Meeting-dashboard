@@ -21,7 +21,6 @@ import type { DepartmentSummary } from "@/lib/dashboard-scope";
 import { Card } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { ActivityCreateProvider, ActivityEditor, AddActivityMenu } from "@/components/dashboard/activity-crud";
-import { ActivityStatusIndicator } from "@/components/dashboard/activity-status-indicator";
 import { CsrActivityPhotos } from "@/components/dashboard/csr-activity-photos";
 import { CsrPhotoGallery } from "@/components/dashboard/csr-photo-gallery";
 import { AddIssueMenu } from "@/components/dashboard/add-issue-menu";
@@ -92,7 +91,6 @@ function ActivityPanel({ category, title, description, icon: Icon, data, subdued
               supplierNames={data.supplierNames}
               relatedIssues={data.issues.filter((issue) => issue.relatedActivityId === activity.id).map(({ id, title: issueTitle, severity, state }) => ({ id, title: issueTitle, severity, state }))}
             >
-              <ActivityStatusIndicator completed={activity.completed} continuing={Boolean(activity.isCarryover || activity.willCarryOver)} />
               <span className="csr-activity-copy">
                 <strong>{activity.content}</strong>
                 {activity.description && <small>{activity.description}</small>}

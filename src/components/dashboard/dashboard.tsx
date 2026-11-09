@@ -17,7 +17,6 @@ import { Card } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { ReportDatePicker } from "@/components/dashboard/report-date-picker";
 import { ActivityCreateProvider, ActivityEditor, AddActivityMenu } from "@/components/dashboard/activity-crud";
-import { ActivityStatusIndicator } from "@/components/dashboard/activity-status-indicator";
 import { AddProjectMenu, ProjectCreateProvider, ProjectEditor } from "@/components/dashboard/project-crud";
 import { DailyRefresh } from "@/components/dashboard/daily-refresh";
 import { FullScreenToggle } from "@/components/dashboard/full-screen-toggle";
@@ -242,10 +241,6 @@ function ActivitySection({
                 state: issue.state,
               }))}
             >
-              <ActivityStatusIndicator
-                completed={activity.completed}
-                continuing={section === "YESTERDAY" && Boolean(activity.isCarryover || activity.willCarryOver)}
-              />
               <span className="activity-number" aria-hidden="true">{sectionNumber}.{index + 1}</span>
               <span className="activity-content type-body">{activity.content}</span>
               {(activity.isCarryover || activity.willCarryOver) && (

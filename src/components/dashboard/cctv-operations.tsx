@@ -255,6 +255,9 @@ export function CctvOperationsPanel({ reportDateKey, recorderItems, cameraStatus
   const [casesOpen, setCasesOpen] = useState(false);
   const [caseImagePreview, setCaseImagePreview] = useState<{ url: string; alt: string; caseNumber: number; photoNumber: number } | null>(null);
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const attentionItems = visibleRecorderItems.filter((item) => item.id !== "recorder-spare" && item.quantity > 0);
+  const listedRecorderItems = detailsExpanded ? visibleRecorderItems : attentionItems;
 
   function openEditor(focusId?: string, addMeeting = false) {
     onOpenStatus();
@@ -465,10 +468,9 @@ export function CctvOperationsPanel({ reportDateKey, recorderItems, cameraStatus
         as="div"
         role="button"
         className={`summary-breakdown-item summary-${summary.tone} summary-systems-trigger`}
-        ariaLabel={`${summary.ariaLabel}. Click to configure.`}
-        ariaExpanded={open}
-        ariaHasPopup="dialog"
-        onActivate={() => openEditor()}
+        ariaLabel={`${summary.ariaLabel}. Click to ${detailsExpanded ? "collapse" : "expand"} details. Right-click to edit.`}
+        ariaExpanded={detailsExpanded}
+        onActivate={() => setDetailsExpanded((current) => !current)}
         onEdit={() => openEditor()}
       >
         <strong className="summary-breakdown-title">{sectionNumber}. CCTV</strong>
@@ -480,16 +482,19 @@ export function CctvOperationsPanel({ reportDateKey, recorderItems, cameraStatus
         {summary.detail && <small>{summary.detail}</small>}
       </ContextMenu>
       <section className="cctv-operations-panel" aria-label="CCTV recorder information">
-        <ul className="cctv-recorder-list">
-          {visibleRecorderItems.map((item) => (
+        {listedRecorderItems.length === 0 && (
+          <button type="button" className="cctv-details-toggle" onClick={() => setDetailsExpanded(true)} aria-expanded={false}>
+            All cameras are normal · Click to view details
+          </button>
+        )}
+        {listedRecorderItems.length > 0 && <ul className="cctv-recorder-list">
+          {listedRecorderItems.map((item) => (
             <ContextMenu
               as="li"
               className="cctv-recorder-context-item"
               role="listitem"
               key={item.id}
-              ariaLabel={`${item.name}, ${item.quantity} units. Click to edit.`}
-              ariaHasPopup="dialog"
-              onActivate={() => openEditor(item.id)}
+              ariaLabel={`${item.name}, ${item.quantity} units. Right-click to edit.`}
               onEdit={() => openEditor(item.id)}
             >
               <div className="cctv-recorder-summary-row">
@@ -505,7 +510,12 @@ export function CctvOperationsPanel({ reportDateKey, recorderItems, cameraStatus
               )}
             </ContextMenu>
           ))}
-        </ul>
+        </ul>}
+        {detailsExpanded && listedRecorderItems.length > 0 && (
+          <button type="button" className="cctv-details-toggle" onClick={() => setDetailsExpanded(false)} aria-expanded>
+            Hide details
+          </button>
+        )}
 
         {meetingVisible && <div className="cctv-meeting-section">
           <ContextMenu
