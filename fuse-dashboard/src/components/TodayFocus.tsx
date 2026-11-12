@@ -12,7 +12,7 @@ export function TodayFocus({ report, update, readOnly }: PanelProps) {
   const toggle = (key: "projectIds" | "taskIds", id: number) => setDraft((d) => ({ ...d, [key]: d[key].includes(id) ? d[key].filter((x) => x !== id) : [...d[key], id] }));
   return (
     <Panel title="Today Focus" icon={<CenterFocusIcon />} action={!readOnly && <Button size="small" color="inherit" variant="outlined" onClick={() => { setDraft(f); setOpen(true); }}>ตั้งค่า</Button>}
-      sx={{ bgcolor: "primary.main", color: "primary.contrastText", "& .MuiTypography-root, & svg": { color: "inherit" } }}>
+      sx={{ background: (t) => `linear-gradient(135deg, ${t.palette.primary.main}, ${t.palette.primary.dark})`, color: "#fff", "& .MuiTypography-root, & svg": { color: "inherit" } }}>
       <Typography variant="h5">{f.title}</Typography>
       {f.detail && <Typography sx={{ opacity: 0.85 }}>{f.detail}</Typography>}
       <Stack spacing={0.5} sx={{ mt: 1 }}>

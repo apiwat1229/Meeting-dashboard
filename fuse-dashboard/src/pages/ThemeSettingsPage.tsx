@@ -9,7 +9,6 @@ export function ThemeSettingsPage({ theme, onChange }: { theme: ThemeSettings; o
       <TextField select size="small" label="โหมด" value={theme.mode} onChange={(e) => onChange({ ...theme, mode: e.target.value as ThemeSettings["mode"] })}>
         <MenuItem value="light">สว่าง</MenuItem><MenuItem value="dark">มืด</MenuItem></TextField>
       <TextField size="small" type="color" label="สีหลัก" value={theme.primary} onChange={(e) => onChange({ ...theme, primary: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
-      <TextField size="small" type="color" label="สี Navbar" value={theme.navy} onChange={(e) => onChange({ ...theme, navy: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
       <div><Typography variant="body2">มุมโค้ง: {theme.radius}px</Typography><Slider min={0} max={24} value={theme.radius} onChange={(_, v) => onChange({ ...theme, radius: v as number })} /></div>
       <Button onClick={() => onChange(defaultTheme)}>คืนค่าเริ่มต้น</Button>
     </Stack></CardContent></Card>

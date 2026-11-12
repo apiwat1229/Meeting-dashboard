@@ -1,12 +1,15 @@
+import { useState } from "react";
 import { Navigate, useParams, useSearchParams } from "react-router-dom";
-import type { Report } from "@/types";
-import { Alert, Box, CircularProgress, Stack, Typography } from "@mui/material";
+import { Alert, Box, Chip, CircularProgress, Stack, Tab, Tabs } from "@mui/material";
 import { useAuth } from "@/auth/AuthContext";
 import { useDepartments, useReport, useReportUpdate } from "@/api/hooks";
 import { todayKey } from "@/api/store";
+import type { Report } from "@/types";
 import { ActivitiesPanel } from "@/components/ActivitiesPanel";
 import { CctvPanel } from "@/components/CctvPanel";
+import { IssueSummary, ProjectProgressChart } from "@/components/Charts";
 import { IssuesPanel } from "@/components/IssuesPanel";
+import { PageHeader } from "@/components/PageHeader";
 import { ProjectsPanel } from "@/components/ProjectsPanel";
 import { SummaryCards } from "@/components/SummaryCards";
 import { SystemStatusPanel } from "@/components/SystemStatusPanel";
@@ -20,10 +23,13 @@ export function DepartmentHome() {
   return mine ? <Navigate to={`/dashboard/${mine.code}`} replace /> : <CircularProgress />;
 }
 
+const two = { display: "grid", gap: 2.5, gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" } };
+
 export function Dashboard() {
   const { user } = useAuth();
   const { department: code } = useParams();
   const [params] = useSearchParams();
+  const [tab, setTab] = useState(0);
   const date = params.get("date") ?? todayKey();
   const { data: deps } = useDepartments();
   const dep = deps?.find((d) => d.code === code);
@@ -32,25 +38,32 @@ export function Dashboard() {
   const { data: report } = useReport(dep?.id ?? 0, date);
   const mutation = useReportUpdate(dep?.id ?? 0, date);
   if (!deps) return <CircularProgress />;
-  if (!allowed) return user && deps.find((d) => d.id === user.departmentId) ? <Navigate to={`/dashboard/${deps.find((d) => d.id === user.departmentId)!.code}`} replace /> : <Alert severity="error">ไม่มีสิทธิ์เข้าถึงแผนกนี้</Alert>;
+  if (!allowed) { const own = user && deps.find((d) => d.id === user.departmentId); return own ? <Navigate to={`/dashboard/${own.code}`} replace /> : <Alert severity="error">ไม่มีสิทธิ์เข้าถึงแผนกนี้</Alert>; }
   if (!report) return <CircularProgress />;
 
   const props = { report, update: (fn: (r: Report) => Report) => mutation.mutate(fn) };
-  if (dep.code === "CSR-GA") return <CsrGaDashboard {...props} departmentName={dep.name} />;
+  const header = (
+    <PageHeader crumbs={["Home", "Dashboards", dep.name]} avatar={dep.name.slice(0, 1)} title={`${dep.name} · Daily Status & Operations`}
+      subtitle={`${report.purpose} · รายงาน ${date} เวลา ${report.reportTime}${report.copiedFrom ? ` · คัดลอกจาก ${report.copiedFrom}` : ""}`} />
+  );
+  if (dep.code === "CSR-GA") return <>{header}<CsrGaDashboard {...props} /></>;
+
   return (
     <Stack spacing={2.5}>
-      <Box><Typography variant="h5">{dep.name} Daily Status & Operations Summary</Typography>
-        <Typography color="text.secondary">{report.purpose} · เวลารายงาน {report.reportTime}{report.copiedFrom && ` · คัดลอกจาก ${report.copiedFrom}`}</Typography></Box>
-      <SummaryCards report={report} />
-      <TodayFocus {...props} />
-      <Box sx={{ display: "grid", gap: 2.5, gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" } }}>
-        <ProjectsPanel {...props} /><IssuesPanel {...props} />
-      </Box>
-      <ActivitiesPanel {...props} />
-      <Box sx={{ display: "grid", gap: 2.5, gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" } }}>
-        <SystemStatusPanel {...props} /><CctvPanel {...props} />
-      </Box>
-      <Typography variant="caption" color="text.secondary">{report.footnote}</Typography>
+      {header}
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} slotProps={{ indicator: { sx: { display: "none" } } }}
+        sx={{ alignSelf: "flex-start", minHeight: 0, p: 0.5, bgcolor: "action.hover", borderRadius: 999, "& .Mui-selected": { bgcolor: "background.paper", boxShadow: 1, color: "text.primary !important" } }}>
+        <Tab label="ภาพรวม" /><Tab label={<Stack direction="row" spacing={1} alignItems="center"><span>โปรเจกต์</span><Chip size="small" label={report.projects.length} /></Stack>} /><Tab label="กิจกรรม" /><Tab label="ระบบ & CCTV" />
+      </Tabs>
+      {tab === 0 && <>
+        <SummaryCards report={report} />
+        <TodayFocus {...props} />
+        <Box sx={two}><ProjectProgressChart report={report} /><IssueSummary report={report} /></Box>
+        <IssuesPanel {...props} />
+      </>}
+      {tab === 1 && <ProjectsPanel {...props} />}
+      {tab === 2 && <ActivitiesPanel {...props} />}
+      {tab === 3 && <Box sx={two}><SystemStatusPanel {...props} /><CctvPanel {...props} /></Box>}
     </Stack>
   );
 }

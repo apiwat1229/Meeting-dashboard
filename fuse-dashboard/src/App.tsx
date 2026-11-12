@@ -28,7 +28,7 @@ export function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route element={<RequireAuth><AppLayout navy={settings.navy} /></RequireAuth>}>
+          <Route element={<RequireAuth><AppLayout settings={settings} onSettings={change} /></RequireAuth>}>
             <Route index element={<DepartmentHome />} />
             <Route path="dashboard/:department" element={<Dashboard />} />
             <Route path="admin/users" element={<RequireAuth admin><AdminUsers /></RequireAuth>} />
