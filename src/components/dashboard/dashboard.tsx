@@ -359,8 +359,8 @@ export function Dashboard({
                 selectedTaskIds={selectedFocusTaskIds}
               />
             </Card>
-            <ActivitySection section="TODAY" title="Today Activities" data={data} />
             <ActivitySection section="YESTERDAY" title="Yesterday Activities" data={data} />
+            <ActivitySection section="TODAY" title="Today Activities" data={data} />
           </section>
 
           <section className="dashboard-lower-grid" aria-label="System status">
