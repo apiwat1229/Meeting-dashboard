@@ -46,10 +46,10 @@ export function ProjectDailyUpdateDisplay({ projectName, title, value }: { proje
         aria-label={`Open full details for ${projectName}. ${title} task: ${value || "No subtasks selected"}`}
       >
         {lines.length > 0 ? (
-          <span className="project-daily-update-picker-text project-daily-update-numbered">
+          <span className="project-daily-update-picker-text project-daily-update-bulleted">
             {lines.map((label, lineIndex) => (
               <span className="project-daily-update-picker-line" key={`${lineIndex}-${label}`}>
-                <span className="project-daily-update-marker" aria-hidden="true">{lineIndex + 1}</span>
+                <span className="project-daily-update-marker" aria-hidden="true" />
                 <span className="project-daily-update-picker-label">{label}</span>
               </span>
             ))}

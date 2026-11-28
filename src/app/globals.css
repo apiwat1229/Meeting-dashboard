@@ -7667,28 +7667,18 @@ p {
   padding-block: 0;
 }
 
-.project-daily-update-numbered .project-daily-update-picker-line {
-  grid-template-columns: 22px minmax(0, 1fr);
-  column-gap: 8px;
-  padding-block: 6px;
+.project-daily-update-bulleted .project-daily-update-picker-line {
+  grid-template-columns: 6px minmax(0, 1fr);
+  column-gap: 10px;
+  padding-block: 3px;
 }
 
-.project-daily-update-numbered .project-daily-update-picker-line + .project-daily-update-picker-line {
-  border-top: 1px dashed var(--color-border);
-}
-
-.project-daily-update-numbered .project-daily-update-marker {
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  margin-top: 1px;
+.project-daily-update-bulleted .project-daily-update-marker {
+  width: 6px;
+  height: 6px;
+  margin-top: calc(0.675em - 3px);
   border-radius: 50%;
-  color: var(--color-navy);
-  background: var(--color-info-soft);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1;
+  background: var(--color-primary);
 }
 
 .project-header th {
@@ -7722,4 +7712,18 @@ p {
 .column-resize-handle:active::after,
 .column-resize-handle:focus-visible::after {
   background: var(--color-primary);
+}
+
+.project-table .project-header th:nth-child(4) {
+  text-align: center;
+}
+
+.project-table .project-schedule-heading {
+  display: inline-grid;
+  justify-items: start;
+  text-align: left;
+}
+
+.project-table .project-schedule-range {
+  justify-content: center;
 }
