@@ -7666,3 +7666,27 @@ p {
 .dashboard-content .summary-cctv-card .cctv-details-toggle {
   padding-block: 0;
 }
+
+.project-daily-update-numbered .project-daily-update-picker-line {
+  grid-template-columns: 22px minmax(0, 1fr);
+  column-gap: 8px;
+  padding-block: 6px;
+}
+
+.project-daily-update-numbered .project-daily-update-picker-line + .project-daily-update-picker-line {
+  border-top: 1px dashed var(--color-border);
+}
+
+.project-daily-update-numbered .project-daily-update-marker {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  margin-top: 1px;
+  border-radius: 50%;
+  color: var(--color-navy);
+  background: var(--color-info-soft);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
