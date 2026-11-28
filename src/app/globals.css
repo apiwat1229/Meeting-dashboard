@@ -7727,3 +7727,22 @@ p {
 .project-table .project-schedule-range {
   justify-content: center;
 }
+
+.project-table .project-header th + th,
+.project-table .project-body td + td {
+  border-left: 1px solid var(--color-border);
+}
+
+.column-resize-handle::after {
+  background: transparent;
+}
+
+.column-resize-handle:hover::after,
+.column-resize-handle:active::after,
+.column-resize-handle:focus-visible::after {
+  background: var(--color-primary);
+}
+
+.project-table .project-schedule-range {
+  grid-template-columns: minmax(0, 175px);
+}
