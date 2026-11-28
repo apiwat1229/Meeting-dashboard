@@ -351,7 +351,9 @@ export function Dashboard({
             <ProjectSection data={data} />
           </section>
 
-          <section className="activity-grid" aria-label="Today’s focus and daily activities">
+          <section className="activity-grid" aria-label="Daily activities and today’s focus">
+            <ActivitySection section="YESTERDAY" title="Yesterday Activities" data={data} />
+            <ActivitySection section="TODAY" title="Today Activities" data={data} />
             <Card className="content-card today-focus-card">
               <TodayFocus
                 projects={focusProjectOptions}
@@ -359,8 +361,6 @@ export function Dashboard({
                 selectedTaskIds={selectedFocusTaskIds}
               />
             </Card>
-            <ActivitySection section="YESTERDAY" title="Yesterday Activities" data={data} />
-            <ActivitySection section="TODAY" title="Today Activities" data={data} />
           </section>
 
           <section className="dashboard-lower-grid" aria-label="System status">
