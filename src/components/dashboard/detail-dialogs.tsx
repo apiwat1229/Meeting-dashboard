@@ -648,6 +648,7 @@ type ProjectDateHistoryEntry = {
   field: string;
   oldValue: string | null;
   newValue: string | null;
+  reason: string;
   changedAt: string;
 };
 
@@ -674,7 +675,11 @@ function ProjectScheduleHistory({ projectId }: { projectId: number }) {
 
   if (!loading && !error && scheduleEntries.length === 0) return null;
 
+  const reasonEntries = scheduleEntries.filter((entry) => entry.reason.trim() !== "");
+  const formatChangedAt = (value: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(value));
+
   return (
+    <>
     <section className="project-schedule-history" aria-label="Schedule date changes" aria-live="polite">
       <div className="project-schedule-history-heading">
         <h3>Date changes</h3>
@@ -701,6 +706,28 @@ function ProjectScheduleHistory({ projectId }: { projectId: number }) {
         </ol>
       )}
     </section>
+    {!loading && !error && (
+      <section className="project-reasons" aria-label="Reasons for date changes">
+        <div className="project-schedule-history-heading">
+          <h3>Reasons</h3>
+        </div>
+        {reasonEntries.length === 0 ? (
+          <p className="project-reasons-empty">No reason recorded for these date changes.</p>
+        ) : (
+          <ul className="project-reasons-list">
+            {reasonEntries.map((entry) => (
+              <li key={entry.id} className="project-reasons-entry">
+                <p className="project-reasons-text">{entry.reason}</p>
+                <span className="project-reasons-meta">
+                  {entry.field === "startDate" ? "Start date" : "End date"} · {entry.oldValue ? formatProjectDate(entry.oldValue) : "Not set"} → {entry.newValue ? formatProjectDate(entry.newValue) : "Not set"} · <time dateTime={entry.changedAt}>{formatChangedAt(entry.changedAt)}</time>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    )}
+    </>
   );
 }
 

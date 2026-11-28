@@ -174,6 +174,11 @@ function ProjectFormFields({ project, tasks, yesterday, today, onYesterdayChange
             <DatePickerField label="Start Date" name="startDate" defaultValue={project?.startDate ?? null} />
             <DatePickerField label="End Date" name="endDate" defaultValue={project?.endDate ?? null} />
           </div>
+          {project && (
+            <label className="field-label">Reason
+              <Textarea name="dateChangeReason" maxLength={500} rows={2} placeholder="Optional" />
+            </label>
+          )}
         </section>
         {!project && showCreateExtras && (
           <section className="project-edit-card project-create-subtasks">

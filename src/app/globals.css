@@ -4113,6 +4113,49 @@ p {
   }
 }
 
+.project-reasons {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 11px;
+  background: var(--color-panel-alt);
+}
+
+.project-reasons-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 4px 0 0;
+  list-style: none;
+}
+
+.project-reasons-entry {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--color-primary);
+  border-radius: 6px;
+  background: var(--color-panel);
+}
+
+.project-reasons-text {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.project-reasons-meta,
+.project-reasons-empty {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
 .project-detail-task-section {
   min-height: 90px;
 }

@@ -47,7 +47,7 @@ type MutationResult = { ok: boolean; message: string };
 type ProjectTrackedField = "name" | "status" | "progress" | "yesterday" | "today" | "startDate" | "endDate";
 type ProjectChangeValues = Partial<Pick<typeof projects.$inferInsert, ProjectTrackedField>>;
 
-async function updateProjectWithHistory(id: number, reportDate: string, departmentId: number, values: ProjectChangeValues) {
+async function updateProjectWithHistory(id: number, reportDate: string, departmentId: number, values: ProjectChangeValues, dateChangeReason = "") {
   await db.transaction(async (tx) => {
     const [current] = await tx.select().from(projects).where(and(eq(projects.id, id), eq(projects.departmentId, departmentId), eq(projects.reportDate, reportDate))).for("update").limit(1);
     if (!current) throw new Error("Project not found.");
@@ -92,6 +92,8 @@ async function updateProjectWithHistory(id: number, reportDate: string, departme
         field,
         oldValue: currentValues[field] === null ? null : String(currentValues[field]),
         newValue: nextValues[field] == null ? null : String(nextValues[field]),
+        // The reason only describes schedule (start/end date) changes.
+        reason: field === "startDate" || field === "endDate" ? dateChangeReason : "",
       }));
 
     await tx.update(projects).set({ ...values, updatedAt: new Date() }).where(and(eq(projects.id, id), eq(projects.departmentId, departmentId), eq(projects.reportDate, reportDate)));
@@ -708,6 +710,7 @@ export async function updateProjectAction(formData: FormData): Promise<MutationR
       today: z.string().trim().max(500),
       startDate: projectDateSchema,
       endDate: projectDateSchema,
+      dateChangeReason: z.string().trim().max(500),
     })
     .refine((values) => !values.startDate || !values.endDate || values.startDate <= values.endDate, {
       path: ["endDate"],
@@ -722,12 +725,13 @@ export async function updateProjectAction(formData: FormData): Promise<MutationR
       today: formData.get("today") ?? "",
       startDate: formData.get("startDate") ?? "",
       endDate: formData.get("endDate") ?? "",
+      dateChangeReason: formData.get("dateChangeReason") ?? "",
     });
 
   if (!parsed.success) return invalidFormResult;
-  const { id, ...values } = parsed.data;
+  const { id, dateChangeReason, ...values } = parsed.data;
   return runMutation("Project updated.", "Could not update the project.", () =>
-    updateProjectWithHistory(id, reportDate, departmentId, values),
+    updateProjectWithHistory(id, reportDate, departmentId, values, dateChangeReason),
   );
 }
 
@@ -801,7 +805,7 @@ export async function updateProjectDailyAction(formData: FormData): Promise<Muta
 export async function getProjectDateHistoryAction(projectId: number): Promise<{
   ok: boolean;
   message?: string;
-  entries: Array<{ id: number; field: string; oldValue: string | null; newValue: string | null; changedAt: string }>;
+  entries: Array<{ id: number; field: string; oldValue: string | null; newValue: string | null; reason: string; changedAt: string }>;
 }> {
   await requireAuthenticatedSession();
   const { reportDate, departmentId } = await getRequestedDashboardContext();
@@ -824,6 +828,7 @@ export async function getProjectDateHistoryAction(projectId: number): Promise<{
       field: projectChangeHistory.field,
       oldValue: projectChangeHistory.oldValue,
       newValue: projectChangeHistory.newValue,
+      reason: projectChangeHistory.reason,
       changedAt: projectChangeHistory.changedAt,
     })
       .from(projectChangeHistory)

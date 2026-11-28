@@ -100,6 +100,7 @@ export const projectChangeHistory = pgTable(
     field: varchar("field", { length: 40 }).notNull(),
     oldValue: text("old_value"),
     newValue: text("new_value"),
+    reason: text("reason").notNull().default(""),
     changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("project_change_history_project_changed_idx").on(table.departmentId, table.reportDate, table.projectId, table.changedAt.desc(), table.id.desc())],
