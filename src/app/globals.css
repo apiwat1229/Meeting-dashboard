@@ -1545,10 +1545,10 @@ p {
   font-weight: 700;
 }
 
-.project-table th:nth-child(1) { width: 24%; }
-.project-table th:nth-child(2) { width: 26%; }
-.project-table th:nth-child(3) { width: 26%; }
-.project-table th:nth-child(4) { width: 16%; }
+.project-table th:nth-child(1) { width: 23%; }
+.project-table th:nth-child(2) { width: auto; }
+.project-table th:nth-child(3) { width: auto; }
+.project-table th:nth-child(4) { width: 190px; }
 .project-table th:nth-child(5) { width: 8%; }
 
 .project-header th {

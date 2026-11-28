@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   Building2,
   CircleAlert,
   CirclePlay,
@@ -243,12 +242,6 @@ function ActivitySection({
             >
               <span className="activity-number" aria-hidden="true">{sectionNumber}.{index + 1}</span>
               <span className="activity-content type-body">{activity.content}</span>
-              {(activity.isCarryover || activity.willCarryOver) && (
-                <span className={`activity-carryover-tag ${activity.willCarryOver ? "activity-carryover-pending" : "activity-carryover-today"}`}>
-                  <ArrowLeft size={16} aria-hidden="true" />
-                  {activity.willCarryOver ? "Continued" : "From yesterday"}
-                </span>
-              )}
             </ActivityEditor>
           ))}
           {entries.length === 0 && relatedIssues.length === 0 && (
@@ -352,6 +345,8 @@ export function Dashboard({
           </section>
 
           <section className="activity-grid" aria-label="Today’s focus and daily activities">
+            <ActivitySection section="YESTERDAY" title="Yesterday Activities" data={data} />
+            <ActivitySection section="TODAY" title="Today Activities" data={data} />
             <Card className="content-card today-focus-card">
               <TodayFocus
                 projects={focusProjectOptions}
@@ -359,8 +354,6 @@ export function Dashboard({
                 selectedTaskIds={selectedFocusTaskIds}
               />
             </Card>
-            <ActivitySection section="YESTERDAY" title="Yesterday Activities" data={data} />
-            <ActivitySection section="TODAY" title="Today Activities" data={data} />
           </section>
 
           <section className="dashboard-lower-grid" aria-label="System status">
