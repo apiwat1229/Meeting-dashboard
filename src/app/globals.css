@@ -7690,3 +7690,36 @@ p {
   font-weight: 700;
   line-height: 1;
 }
+
+.project-header th {
+  position: relative;
+}
+
+.column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  bottom: 0;
+  z-index: 2;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.column-resize-handle::after {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 4px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--color-border);
+  content: "";
+}
+
+.column-resize-handle:hover::after,
+.column-resize-handle:active::after,
+.column-resize-handle:focus-visible::after {
+  background: var(--color-primary);
+}

@@ -17,6 +17,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { ReportDatePicker } from "@/components/dashboard/report-date-picker";
 import { ActivityCreateProvider, ActivityEditor, AddActivityMenu } from "@/components/dashboard/activity-crud";
 import { AddProjectMenu, ProjectCreateProvider, ProjectEditor } from "@/components/dashboard/project-crud";
+import { ColumnResizeHandle } from "@/components/dashboard/column-resize-handle";
 import { DailyRefresh } from "@/components/dashboard/daily-refresh";
 import { FullScreenToggle } from "@/components/dashboard/full-screen-toggle";
 import { TodayFocus } from "@/components/dashboard/today-focus";
@@ -159,14 +160,15 @@ function ProjectSection({ data }: { data: DashboardData }) {
           <table className="project-table" aria-label="Project progress">
             <thead>
               <tr className="project-header type-caption">
-                <th scope="col">Project Name</th>
-                <th scope="col">Yesterday Task</th>
-                <th scope="col">Today Task</th>
+                <th scope="col">Project Name<ColumnResizeHandle index={0} label="Project Name" /></th>
+                <th scope="col">Yesterday Task<ColumnResizeHandle index={1} label="Yesterday Task" /></th>
+                <th scope="col">Today Task<ColumnResizeHandle index={2} label="Today Task" /></th>
                 <th scope="col">
                   <span className="project-schedule-heading">
                     <span><CirclePlay className="project-schedule-heading-icon" aria-hidden="true" /> Start</span>
                     <span><Flag className="project-schedule-heading-icon" aria-hidden="true" /> Finish</span>
                   </span>
+                  <ColumnResizeHandle index={3} label="Start and Finish" />
                 </th>
                 <th scope="col">Progress</th>
               </tr>
